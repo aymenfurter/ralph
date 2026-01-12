@@ -358,7 +358,7 @@ describe('Webview Templates', () => {
         it('should include disclaimer', () => {
             const footer = getFooter();
             assert.ok(footer.includes('footer-disclaimer'));
-            assert.ok(footer.includes('Not affiliated'));
+            assert.ok(footer.includes('not officially endorsed by or affiliated with'));
         });
     });
 
