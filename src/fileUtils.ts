@@ -92,7 +92,7 @@ function parseTasksFromContent(content: string): Task[] {
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        const match = /^[-*]\s*\[([ x~!])\]\s*(.+)$/i.exec(line);
+        const match = /^[-*]\s*\[([ x~!])\]\s*(.+)$/im.exec(line);
 
         if (match) {
             const marker = match[1].toLowerCase();
