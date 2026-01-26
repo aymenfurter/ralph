@@ -1,5 +1,33 @@
 import { Task } from '../types';
 
+/**
+ * Escapes HTML special characters to prevent XSS attacks.
+ * Use this for any user-generated or external content rendered in webviews.
+ */
+export function escapeHtml(text: string): string {
+    const htmlEscapes: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
+    return text.replace(/[&<>"']/g, char => htmlEscapes[char]);
+}
+
+/**
+ * Generates a cryptographic nonce for Content Security Policy.
+ * Each webview render should use a fresh nonce.
+ */
+export function getNonce(): string {
+    let nonce = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        nonce += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return nonce;
+}
+
 export const Icons = {
     play: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
     pause: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',
@@ -180,7 +208,7 @@ export function getTaskSection(nextTask: Task | null, hasAnyTasks: boolean): str
         return `
         <div class="task-section active" id="taskSection">
             <div class="task-label">Current Task</div>
-            <div class="task-text" id="taskText">${nextTask.description}</div>
+            <div class="task-text" id="taskText">${escapeHtml(nextTask.description)}</div>
         </div>`;
     } else if (hasAnyTasks) {
         return `

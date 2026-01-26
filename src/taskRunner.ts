@@ -6,7 +6,7 @@ import {
     DEFAULT_REQUIREMENTS,
     DEFAULT_SETTINGS
 } from './types';
-import { logError } from './logger';
+import { logError, logSensitive } from './logger';
 import { getWorkspaceRoot } from './fileUtils';
 import { buildAgentPromptAsync, buildPrdGenerationPrompt } from './promptBuilder';
 import { openCopilotWithPrompt, startFreshChatSession } from './copilotIntegration';
@@ -104,6 +104,7 @@ export class TaskRunner {
     async triggerCopilotAgent(taskDescription: string): Promise<CopilotResult | null> {
         try {
             const prompt = await buildAgentPromptAsync(taskDescription, this.requirements);
+            logSensitive('Generated agent prompt', prompt);
 
             // Always start fresh chat session
             const success = await startFreshChatSession();
@@ -137,6 +138,7 @@ export class TaskRunner {
 
         try {
             const prompt = buildPrdGenerationPrompt(taskDescription, root);
+            logSensitive('Generated PRD prompt', prompt);
             const method = await openCopilotWithPrompt(prompt);
             this.log(
                 method === 'agent' ? 'Opened Copilot Agent Mode' :

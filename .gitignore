@@ -5,3 +5,4 @@ node_modules
 .ralph
 coverage
 .nyc_output
+dist
