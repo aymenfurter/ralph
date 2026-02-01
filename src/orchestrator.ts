@@ -6,7 +6,7 @@ import {
     REVIEW_COUNTDOWN_SECONDS,
     IRalphUI
 } from './types';
-import { logError } from './logger';
+import { logError, logSensitive } from './logger';
 import { readPRDAsync, getNextTaskAsync, getTaskStatsAsync, getWorkspaceRoot, appendProgressAsync, ensureProgressFileAsync } from './fileUtils';
 import { RalphStatusBar } from './statusBar';
 import { CountdownTimer, InactivityMonitor } from './timerManager';
@@ -170,6 +170,8 @@ export class LoopOrchestrator {
         const prd = await readPRDAsync();
         const settings = this.taskRunner.getSettings();
 
+        logSensitive('Showing status, PRD loaded', prd ? '[PRD content available]' : '[No PRD]');
+
         stream.markdown('## Ralph Status\n\n');
 
         if (!prd) {
@@ -250,6 +252,7 @@ export class LoopOrchestrator {
         this.ui.updateStatus('running', iteration, task.description);
 
         this.ui.addLog(`Task ${iteration}: ${task.description}`);
+        logSensitive(`Starting task ${iteration}`, task.description);
         await this.taskRunner.triggerCopilotAgent(task.description);
 
         this.fileWatchers.prdWatcher.enable();

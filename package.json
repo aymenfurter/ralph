@@ -87,6 +87,11 @@
           "default": "",
           "editPresentation": "multilineText",
           "description": "Custom PRD generation prompt template. Use {{task}} for user's request and {{workspace}} for workspace path."
+        },
+        "ralph.logging.debugMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug mode to log detailed information including task content. Disable in production to prevent sensitive data exposure."
         }
       }
     }
@@ -96,6 +101,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
+    "package": "mkdir -p dist && vsce package --out dist/ralph-$npm_package_version.vsix",
     "test": "node ./out/test/runTest.js",
     "pretest:unit": "npm run compile",
     "test:unit": "mocha --reporter spec out/test/unit/**/*.unit.test.js",

@@ -7,3 +7,16 @@ node_modules/**
 .eslintrc.cjs
 tsconfig.json
 **/*.ts
+
+# Test output
+**/test/**
+
+# Development files
+.github/**
+.devcontainer/**
+.nycrc.json
+
+# Large assets - reference via GitHub URL in README instead
+assets/demo.gif
+assets/*.gif
+assets/*.mp4
