@@ -2,6 +2,15 @@
 
 All notable changes to the Ralph extension will be documented in this file.
 
+## [0.5.1]
+
+### Fixed
+- Fixed task parsing for Windows CRLF line endings (Issue: "No pending tasks found" on Windows 11)
+- PRD files created on Windows are now parsed correctly regardless of line ending style (CRLF, LF, or CR)
+
+### Added
+- Comprehensive test suite for cross-platform line ending support (42 fixture files)
+
 ## [0.3.16]
 
 ### Changed

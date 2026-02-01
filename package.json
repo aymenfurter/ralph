@@ -2,7 +2,7 @@
   "name": "ralph",
   "displayName": "Ralph - Autonomous PRD Development",
   "description": "Runs Copilot Agent Mode in a loop to implement tasks from your PRD.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "ralph-dev",
   "license": "MIT",
   "repository": {
