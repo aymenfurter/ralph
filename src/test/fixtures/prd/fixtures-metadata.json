@@ -1,0 +1,162 @@
+[
+  {
+    "name": "01-simple",
+    "expectedTasks": 5,
+    "expectedPending": 5,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "02-with-note",
+    "expectedTasks": 5,
+    "expectedPending": 5,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "03-mixed-status",
+    "expectedTasks": 7,
+    "expectedPending": 3,
+    "expectedComplete": 3,
+    "expectedInProgress": 1,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "04-multi-section",
+    "expectedTasks": 9,
+    "expectedPending": 5,
+    "expectedComplete": 2,
+    "expectedInProgress": 1,
+    "expectedBlocked": 1
+  },
+  {
+    "name": "05-blank-lines-between-tasks",
+    "expectedTasks": 5,
+    "expectedPending": 4,
+    "expectedComplete": 1,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "06-asterisk-markers",
+    "expectedTasks": 5,
+    "expectedPending": 3,
+    "expectedComplete": 1,
+    "expectedInProgress": 1,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "07-long-descriptions",
+    "expectedTasks": 5,
+    "expectedPending": 5,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "08-no-header",
+    "expectedTasks": 4,
+    "expectedPending": 3,
+    "expectedComplete": 1,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "09-with-indented-comments",
+    "expectedTasks": 5,
+    "expectedPending": 4,
+    "expectedComplete": 1,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "10-all-statuses",
+    "expectedTasks": 5,
+    "expectedPending": 1,
+    "expectedComplete": 2,
+    "expectedInProgress": 1,
+    "expectedBlocked": 1
+  },
+  {
+    "name": "11-meal-tracker-github-issue",
+    "expectedTasks": 6,
+    "expectedPending": 6,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "12-unicode-content",
+    "expectedTasks": 5,
+    "expectedPending": 4,
+    "expectedComplete": 1,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "13-windows-paths",
+    "expectedTasks": 5,
+    "expectedPending": 4,
+    "expectedComplete": 1,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "14-trailing-spaces",
+    "expectedTasks": 4,
+    "expectedPending": 3,
+    "expectedComplete": 1,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "15-tabs-mixed",
+    "expectedTasks": 4,
+    "expectedPending": 4,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "16-very-long-task",
+    "expectedTasks": 2,
+    "expectedPending": 2,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "17-empty-lines-start",
+    "expectedTasks": 2,
+    "expectedPending": 2,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "18-no-trailing-newline",
+    "expectedTasks": 2,
+    "expectedPending": 2,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "19-bom-file",
+    "expectedTasks": 3,
+    "expectedPending": 2,
+    "expectedComplete": 1,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  },
+  {
+    "name": "20-consecutive-empty-lines",
+    "expectedTasks": 2,
+    "expectedPending": 2,
+    "expectedComplete": 0,
+    "expectedInProgress": 0,
+    "expectedBlocked": 0
+  }
+]

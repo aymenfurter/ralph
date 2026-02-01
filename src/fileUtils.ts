@@ -88,7 +88,8 @@ export async function ensureProgressFileAsync(): Promise<boolean> {
 
 function parseTasksFromContent(content: string): Task[] {
     const tasks: Task[] = [];
-    const lines = content.split('\n');
+    // Normalize line endings: handle CRLF (Windows), LF (Unix), and CR (old Mac)
+    const lines = content.split(/\r?\n|\r/);
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];

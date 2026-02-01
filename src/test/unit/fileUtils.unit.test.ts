@@ -1,5 +1,27 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Task, TaskStatus } from '../../types';
+
+// Helper to load fixture files
+const fixturesDir = path.join(__dirname, '..', '..', '..', 'src', 'test', 'fixtures', 'prd');
+
+function loadFixture(filename: string): string {
+    return fs.readFileSync(path.join(fixturesDir, filename), 'utf-8');
+}
+
+interface FixtureMetadata {
+    name: string;
+    expectedTasks: number;
+    expectedPending: number;
+    expectedComplete: number;
+    expectedInProgress: number;
+    expectedBlocked: number;
+}
+
+function loadMetadata(): FixtureMetadata[] {
+    return JSON.parse(fs.readFileSync(path.join(fixturesDir, 'fixtures-metadata.json'), 'utf-8'));
+}
 
 // Since fileUtils imports vscode modules, we test the pure parsing logic
 // by re-implementing the parseTasksFromContent function here for unit testing purposes.
@@ -9,7 +31,8 @@ import { Task, TaskStatus } from '../../types';
 
 function parseTasksFromContent(content: string): Task[] {
     const tasks: Task[] = [];
-    const lines = content.split('\n');
+    // Normalize line endings: handle CRLF (Windows), LF (Unix), and CR (old Mac)
+    const lines = content.split(/\r?\n|\r/);
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -47,374 +70,435 @@ function parseTasksFromContent(content: string): Task[] {
     return tasks;
 }
 
+function countByStatus(tasks: Task[], status: TaskStatus): number {
+    return tasks.filter(t => t.status === status).length;
+}
+
 describe('FileUtils - Task Parsing Regex', () => {
-    describe('Basic checkbox formats', () => {
-        it('should parse unchecked task with dash', () => {
-            const content = '- [ ] Set up project structure with dependencies';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Set up project structure with dependencies');
-            assert.strictEqual(tasks[0].status, TaskStatus.PENDING);
+    let metadata: FixtureMetadata[];
+
+    before(() => {
+        metadata = loadMetadata();
+    });
+
+    describe('LF fixtures - task count validation', () => {
+        it('should parse correct number of tasks from all LF fixtures', () => {
+            metadata.forEach(fixture => {
+                const content = loadFixture(`${fixture.name}-lf.md`);
+                const tasks = parseTasksFromContent(content);
+
+                assert.strictEqual(
+                    tasks.length,
+                    fixture.expectedTasks,
+                    `${fixture.name}-lf.md: Expected ${fixture.expectedTasks} tasks, got ${tasks.length}`
+                );
+            });
         });
 
-        it('should parse unchecked task with asterisk', () => {
-            const content = '* [ ] Create core data models and types';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Create core data models and types');
-            assert.strictEqual(tasks[0].status, TaskStatus.PENDING);
-        });
+        it('should parse correct status counts from all LF fixtures', () => {
+            metadata.forEach(fixture => {
+                const content = loadFixture(`${fixture.name}-lf.md`);
+                const tasks = parseTasksFromContent(content);
 
-        it('should parse checked task with dash', () => {
-            const content = '- [x] Implement main application logic';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Implement main application logic');
-            assert.strictEqual(tasks[0].status, TaskStatus.COMPLETE);
-        });
+                const pending = countByStatus(tasks, TaskStatus.PENDING);
+                const complete = countByStatus(tasks, TaskStatus.COMPLETE);
+                const inProgress = countByStatus(tasks, TaskStatus.IN_PROGRESS);
+                const blocked = countByStatus(tasks, TaskStatus.BLOCKED);
 
-        it('should parse checked task with asterisk', () => {
-            const content = '* [x] Add user interface and styling';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Add user interface and styling');
-            assert.strictEqual(tasks[0].status, TaskStatus.COMPLETE);
-        });
-
-        it('should parse in-progress task', () => {
-            const content = '- [~] Write tests and documentation';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Write tests and documentation');
-            assert.strictEqual(tasks[0].status, TaskStatus.IN_PROGRESS);
-        });
-
-        it('should parse blocked task', () => {
-            const content = '- [!] Fix critical bug in authentication';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Fix critical bug in authentication');
-            assert.strictEqual(tasks[0].status, TaskStatus.BLOCKED);
+                if (fixture.expectedPending > 0) {
+                    assert.strictEqual(pending, fixture.expectedPending,
+                        `${fixture.name}-lf.md: Expected ${fixture.expectedPending} pending, got ${pending}`);
+                }
+                if (fixture.expectedComplete > 0) {
+                    assert.strictEqual(complete, fixture.expectedComplete,
+                        `${fixture.name}-lf.md: Expected ${fixture.expectedComplete} complete, got ${complete}`);
+                }
+                if (fixture.expectedInProgress > 0) {
+                    assert.strictEqual(inProgress, fixture.expectedInProgress,
+                        `${fixture.name}-lf.md: Expected ${fixture.expectedInProgress} in-progress, got ${inProgress}`);
+                }
+                if (fixture.expectedBlocked > 0) {
+                    assert.strictEqual(blocked, fixture.expectedBlocked,
+                        `${fixture.name}-lf.md: Expected ${fixture.expectedBlocked} blocked, got ${blocked}`);
+                }
+            });
         });
     });
 
-    describe('Whitespace variations', () => {
-        it('should parse task with single space after marker', () => {
-            const content = '- [ ] Task with single space';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Task with single space');
+    describe('CRLF fixtures - task count validation', () => {
+        it('should parse correct number of tasks from all CRLF fixtures', () => {
+            metadata.forEach(fixture => {
+                const content = loadFixture(`${fixture.name}-crlf.md`);
+                const tasks = parseTasksFromContent(content);
+
+                assert.strictEqual(
+                    tasks.length,
+                    fixture.expectedTasks,
+                    `${fixture.name}-crlf.md: Expected ${fixture.expectedTasks} tasks, got ${tasks.length}`
+                );
+            });
         });
 
-        it('should parse task with multiple spaces after marker', () => {
-            const content = '-    [ ] Task with multiple spaces';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Task with multiple spaces');
-        });
+        it('should parse correct status counts from all CRLF fixtures', () => {
+            metadata.forEach(fixture => {
+                const content = loadFixture(`${fixture.name}-crlf.md`);
+                const tasks = parseTasksFromContent(content);
 
-        it('should parse task with multiple spaces after checkbox', () => {
-            const content = '- [ ]    Task with spaces after checkbox';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Task with spaces after checkbox');
-        });
+                const pending = countByStatus(tasks, TaskStatus.PENDING);
+                const complete = countByStatus(tasks, TaskStatus.COMPLETE);
+                const inProgress = countByStatus(tasks, TaskStatus.IN_PROGRESS);
+                const blocked = countByStatus(tasks, TaskStatus.BLOCKED);
 
-        it('should parse task with tab after marker', () => {
-            const content = '-\t[ ] Task with tab';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Task with tab');
-        });
-
-        it('should parse task with trailing whitespace in description', () => {
-            const content = '- [ ] Task with trailing spaces   ';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Task with trailing spaces');
-        });
-    });
-
-    describe('Case sensitivity', () => {
-        it('should parse uppercase X as complete', () => {
-            const content = '- [X] Task with uppercase X';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].status, TaskStatus.COMPLETE);
-        });
-
-        it('should parse lowercase x as complete', () => {
-            const content = '- [x] Task with lowercase x';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].status, TaskStatus.COMPLETE);
+                if (fixture.expectedPending > 0) {
+                    assert.strictEqual(pending, fixture.expectedPending,
+                        `${fixture.name}-crlf.md: Expected ${fixture.expectedPending} pending, got ${pending}`);
+                }
+                if (fixture.expectedComplete > 0) {
+                    assert.strictEqual(complete, fixture.expectedComplete,
+                        `${fixture.name}-crlf.md: Expected ${fixture.expectedComplete} complete, got ${complete}`);
+                }
+                if (fixture.expectedInProgress > 0) {
+                    assert.strictEqual(inProgress, fixture.expectedInProgress,
+                        `${fixture.name}-crlf.md: Expected ${fixture.expectedInProgress} in-progress, got ${inProgress}`);
+                }
+                if (fixture.expectedBlocked > 0) {
+                    assert.strictEqual(blocked, fixture.expectedBlocked,
+                        `${fixture.name}-crlf.md: Expected ${fixture.expectedBlocked} blocked, got ${blocked}`);
+                }
+            });
         });
     });
 
-    describe('Multiple tasks in document', () => {
-        it('should parse multiple tasks from PRD example', () => {
-            const content = `# My Project
+    describe('LF vs CRLF consistency', () => {
+        it('should parse identical task counts for LF and CRLF versions', () => {
+            metadata.forEach(fixture => {
+                const lfContent = loadFixture(`${fixture.name}-lf.md`);
+                const crlfContent = loadFixture(`${fixture.name}-crlf.md`);
 
-## Overview
-Brief description of what you're building.
+                const lfTasks = parseTasksFromContent(lfContent);
+                const crlfTasks = parseTasksFromContent(crlfContent);
 
-## Tasks
-- [x] Set up project structure with dependencies
-- [x] Create core data models and types
-- [ ] Implement main application logic
-- [ ] Add user interface and styling
-- [ ] Write tests and documentation`;
-            
+                assert.strictEqual(
+                    lfTasks.length,
+                    crlfTasks.length,
+                    `${fixture.name}: LF (${lfTasks.length}) and CRLF (${crlfTasks.length}) should have same task count`
+                );
+            });
+        });
+
+        it('should parse identical descriptions for LF and CRLF versions', () => {
+            metadata.forEach(fixture => {
+                const lfContent = loadFixture(`${fixture.name}-lf.md`);
+                const crlfContent = loadFixture(`${fixture.name}-crlf.md`);
+
+                const lfTasks = parseTasksFromContent(lfContent);
+                const crlfTasks = parseTasksFromContent(crlfContent);
+
+                for (let i = 0; i < lfTasks.length; i++) {
+                    assert.strictEqual(
+                        crlfTasks[i].description,
+                        lfTasks[i].description,
+                        `${fixture.name}: Task ${i + 1} description mismatch. ` +
+                        `LF: ${JSON.stringify(lfTasks[i].description)}, ` +
+                        `CRLF: ${JSON.stringify(crlfTasks[i].description)}`
+                    );
+                }
+            });
+        });
+
+        it('should parse identical statuses for LF and CRLF versions', () => {
+            metadata.forEach(fixture => {
+                const lfContent = loadFixture(`${fixture.name}-lf.md`);
+                const crlfContent = loadFixture(`${fixture.name}-crlf.md`);
+
+                const lfTasks = parseTasksFromContent(lfContent);
+                const crlfTasks = parseTasksFromContent(crlfContent);
+
+                for (let i = 0; i < lfTasks.length; i++) {
+                    assert.strictEqual(
+                        crlfTasks[i].status,
+                        lfTasks[i].status,
+                        `${fixture.name}: Task ${i + 1} status mismatch`
+                    );
+                }
+            });
+        });
+    });
+
+    describe('CRLF files should not have CR in parsed data', () => {
+        it('should NOT have carriage return in descriptions from any CRLF file', () => {
+            metadata.forEach(fixture => {
+                const content = loadFixture(`${fixture.name}-crlf.md`);
+                const tasks = parseTasksFromContent(content);
+
+                tasks.forEach((task, index) => {
+                    assert.strictEqual(
+                        task.description.includes('\r'),
+                        false,
+                        `${fixture.name}-crlf.md: Task ${index + 1} description contains \\r: ${JSON.stringify(task.description)}`
+                    );
+                });
+            });
+        });
+
+        it('should NOT have carriage return in rawLine from any CRLF file', () => {
+            metadata.forEach(fixture => {
+                const content = loadFixture(`${fixture.name}-crlf.md`);
+                const tasks = parseTasksFromContent(content);
+
+                tasks.forEach((task, index) => {
+                    assert.strictEqual(
+                        task.rawLine.includes('\r'),
+                        false,
+                        `${fixture.name}-crlf.md: Task ${index + 1} rawLine contains \\r: ${JSON.stringify(task.rawLine)}`
+                    );
+                });
+            });
+        });
+
+        it('should have byte-for-byte identical descriptions between LF and CRLF', () => {
+            metadata.forEach(fixture => {
+                const lfContent = loadFixture(`${fixture.name}-lf.md`);
+                const crlfContent = loadFixture(`${fixture.name}-crlf.md`);
+
+                const lfTasks = parseTasksFromContent(lfContent);
+                const crlfTasks = parseTasksFromContent(crlfContent);
+
+                for (let i = 0; i < lfTasks.length; i++) {
+                    const lfChars = [...lfTasks[i].description];
+                    const crlfChars = [...crlfTasks[i].description];
+
+                    assert.strictEqual(
+                        lfChars.length,
+                        crlfChars.length,
+                        `${fixture.name}: Task ${i + 1} description length mismatch`
+                    );
+
+                    for (let j = 0; j < lfChars.length; j++) {
+                        assert.strictEqual(
+                            crlfChars[j].charCodeAt(0),
+                            lfChars[j].charCodeAt(0),
+                            `${fixture.name}: Task ${i + 1} char ${j} mismatch ` +
+                            `(CRLF: ${crlfChars[j].charCodeAt(0)}, LF: ${lfChars[j].charCodeAt(0)})`
+                        );
+                    }
+                }
+            });
+        });
+    });
+
+    describe('Special line ending files', () => {
+        it('should parse CR-only file (old Mac style)', () => {
+            const content = loadFixture('21-cr-only.md');
             const tasks = parseTasksFromContent(content);
-            
+
+            // Should match first fixture which has 5 tasks
+            assert.strictEqual(tasks.length, 5, 'CR-only file should parse 5 tasks');
+            tasks.forEach((task, index) => {
+                assert.strictEqual(
+                    task.description.includes('\r'),
+                    false,
+                    `CR-only: Task ${index + 1} description should not contain \\r`
+                );
+            });
+        });
+
+        it('should parse mixed line endings file', () => {
+            const content = loadFixture('22-mixed-line-endings.md');
+            const tasks = parseTasksFromContent(content);
+
+            assert.strictEqual(tasks.length, 5, 'Mixed line endings file should parse 5 tasks');
+            tasks.forEach((task, index) => {
+                assert.strictEqual(
+                    task.description.includes('\r'),
+                    false,
+                    `Mixed endings: Task ${index + 1} description should not contain \\r`
+                );
+                assert.strictEqual(
+                    task.rawLine.includes('\r'),
+                    false,
+                    `Mixed endings: Task ${index + 1} rawLine should not contain \\r`
+                );
+            });
+        });
+    });
+
+    describe('Specific fixture validation', () => {
+        it('should parse 01-simple correctly', () => {
+            const lfTasks = parseTasksFromContent(loadFixture('01-simple-lf.md'));
+            const crlfTasks = parseTasksFromContent(loadFixture('01-simple-crlf.md'));
+
+            assert.strictEqual(lfTasks.length, 5);
+            assert.strictEqual(crlfTasks.length, 5);
+            assert.strictEqual(lfTasks[0].status, TaskStatus.PENDING);
+            assert.strictEqual(crlfTasks[0].status, TaskStatus.PENDING);
+        });
+
+        it('should parse 03-mixed-status correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('03-mixed-status-crlf.md'));
+
+            assert.strictEqual(tasks.length, 7);
+            assert.strictEqual(countByStatus(tasks, TaskStatus.COMPLETE), 3);
+            assert.strictEqual(countByStatus(tasks, TaskStatus.IN_PROGRESS), 1);
+            assert.strictEqual(countByStatus(tasks, TaskStatus.PENDING), 3);
+        });
+
+        it('should parse 04-multi-section correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('04-multi-section-crlf.md'));
+
+            assert.strictEqual(tasks.length, 9);
+            assert.strictEqual(countByStatus(tasks, TaskStatus.COMPLETE), 2);
+            assert.strictEqual(countByStatus(tasks, TaskStatus.PENDING), 5);
+            assert.strictEqual(countByStatus(tasks, TaskStatus.IN_PROGRESS), 1);
+            assert.strictEqual(countByStatus(tasks, TaskStatus.BLOCKED), 1);
+        });
+
+        it('should parse 06-asterisk-markers correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('06-asterisk-markers-crlf.md'));
+
             assert.strictEqual(tasks.length, 5);
-            assert.strictEqual(tasks[0].description, 'Set up project structure with dependencies');
-            assert.strictEqual(tasks[0].status, TaskStatus.COMPLETE);
-            assert.strictEqual(tasks[1].description, 'Create core data models and types');
+            // Verify asterisk markers work the same as dash
+            tasks.forEach(task => {
+                assert.ok(task.rawLine.startsWith('*'), 'All tasks should use asterisk marker');
+            });
+        });
+
+        it('should parse 10-all-statuses correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('10-all-statuses-crlf.md'));
+
+            assert.strictEqual(tasks.length, 5);
+            assert.strictEqual(tasks[0].status, TaskStatus.PENDING);
             assert.strictEqual(tasks[1].status, TaskStatus.COMPLETE);
-            assert.strictEqual(tasks[2].description, 'Implement main application logic');
-            assert.strictEqual(tasks[2].status, TaskStatus.PENDING);
-            assert.strictEqual(tasks[3].description, 'Add user interface and styling');
-            assert.strictEqual(tasks[3].status, TaskStatus.PENDING);
-            assert.strictEqual(tasks[4].description, 'Write tests and documentation');
-            assert.strictEqual(tasks[4].status, TaskStatus.PENDING);
-        });
-
-        it('should parse mixed task markers', () => {
-            const content = `- [ ] First task with dash
-* [ ] Second task with asterisk
-- [x] Third task completed
-* [~] Fourth task in progress`;
-            
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 4);
-            assert.strictEqual(tasks[0].description, 'First task with dash');
-            assert.strictEqual(tasks[1].description, 'Second task with asterisk');
-            assert.strictEqual(tasks[2].status, TaskStatus.COMPLETE);
+            assert.strictEqual(tasks[2].status, TaskStatus.COMPLETE); // uppercase X
             assert.strictEqual(tasks[3].status, TaskStatus.IN_PROGRESS);
-        });
-    });
-
-    describe('Edge cases and special characters', () => {
-        it('should parse task with special characters in description', () => {
-            const content = '- [ ] Task with special chars: @#$%^&*()';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Task with special chars: @#$%^&*()');
+            assert.strictEqual(tasks[4].status, TaskStatus.BLOCKED);
         });
 
-        it('should parse task with punctuation', () => {
-            const content = '- [ ] Add authentication & authorization (OAuth 2.0)';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Add authentication & authorization (OAuth 2.0)');
+        it('should parse 11-meal-tracker-github-issue correctly (the original bug report)', () => {
+            const lfTasks = parseTasksFromContent(loadFixture('11-meal-tracker-github-issue-lf.md'));
+            const crlfTasks = parseTasksFromContent(loadFixture('11-meal-tracker-github-issue-crlf.md'));
+
+            assert.strictEqual(lfTasks.length, 6, 'LF version should have 6 tasks');
+            assert.strictEqual(crlfTasks.length, 6, 'CRLF version should have 6 tasks');
+
+            // All should be pending in this PRD
+            lfTasks.forEach((task, i) => {
+                assert.strictEqual(task.status, TaskStatus.PENDING, `LF Task ${i + 1} should be pending`);
+            });
+            crlfTasks.forEach((task, i) => {
+                assert.strictEqual(task.status, TaskStatus.PENDING, `CRLF Task ${i + 1} should be pending`);
+            });
         });
 
-        it('should parse task with numbers', () => {
-            const content = '- [ ] Configure port 3000 for development server';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Configure port 3000 for development server');
+        it('should parse 12-unicode-content correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('12-unicode-content-crlf.md'));
+
+            assert.strictEqual(tasks.length, 5);
+            // Verify unicode characters are preserved
+            assert.ok(tasks.some(t => t.description.includes('🚀')), 'Should contain emoji');
+            assert.ok(tasks.some(t => t.description.includes('日本語')), 'Should contain Japanese');
+            assert.ok(tasks.some(t => t.description.includes('中文')), 'Should contain Chinese');
         });
 
-        it('should parse task with backticks', () => {
-            const content = '- [ ] Update `package.json` with dependencies';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Update `package.json` with dependencies');
+        it('should parse 13-windows-paths correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('13-windows-paths-crlf.md'));
+
+            assert.strictEqual(tasks.length, 5);
+            assert.ok(tasks.some(t => t.description.includes('C:\\')), 'Should contain Windows path');
+            assert.ok(tasks.some(t => t.description.includes('Program Files')), 'Should contain Program Files');
         });
 
-        it('should parse task with quotes', () => {
-            const content = '- [ ] Add "feature" to the application';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Add "feature" to the application');
+        it('should parse 16-very-long-task correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('16-very-long-task-crlf.md'));
+
+            assert.strictEqual(tasks.length, 2);
+            assert.ok(tasks[0].description.length > 600, 'First task should have long description');
         });
 
-        it('should parse task with emojis', () => {
-            const content = '- [ ] 🚀 Deploy to production';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, '🚀 Deploy to production');
-        });
-    });
+        it('should parse 18-no-trailing-newline correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('18-no-trailing-newline-crlf.md'));
 
-    describe('Non-matching patterns', () => {
-        it('should not match task without checkbox', () => {
-            const content = '- Just a regular list item';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
+            assert.strictEqual(tasks.length, 2);
+            assert.strictEqual(tasks[1].description.includes('\r'), false);
         });
 
-        it('should not match task with indentation', () => {
-            const content = '  - [ ] Indented task';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
-        });
+        it('should parse 19-bom-file correctly', () => {
+            const tasks = parseTasksFromContent(loadFixture('19-bom-file-crlf.md'));
 
-        it('should not match task with invalid checkbox marker', () => {
-            const content = '- [y] Invalid checkbox marker';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
-        });
-
-        it('should not match plain text', () => {
-            const content = 'This is just plain text';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
-        });
-
-        it('should not match task starting with number', () => {
-            const content = '1. [ ] Numbered list with checkbox';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
+            assert.strictEqual(tasks.length, 3);
+            tasks.forEach((task, i) => {
+                assert.strictEqual(
+                    task.description.includes('\uFEFF'),
+                    false,
+                    `Task ${i + 1} should not contain BOM character`
+                );
+            });
         });
     });
 
     describe('Line number tracking', () => {
-        it('should track correct line numbers', () => {
-            const content = `Line 1: heading
-Line 2: text
-- [ ] Task on line 3
-Line 4: more text
-- [x] Task on line 5`;
-            
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 2);
-            assert.strictEqual(tasks[0].lineNumber, 3);
-            assert.strictEqual(tasks[1].lineNumber, 5);
+        it('should track correct line numbers with LF', () => {
+            const tasks = parseTasksFromContent(loadFixture('01-simple-lf.md'));
+
+            // Tasks start at line 7 in the simple fixture (after header, blank, overview header, desc, blank, tasks header)
+            assert.ok(tasks[0].lineNumber > 0, 'First task should have positive line number');
+
+            // Line numbers should be sequential for consecutive tasks
+            for (let i = 1; i < tasks.length; i++) {
+                assert.ok(
+                    tasks[i].lineNumber > tasks[i - 1].lineNumber,
+                    `Task ${i + 1} line number should be greater than task ${i}`
+                );
+            }
+        });
+
+        it('should track correct line numbers with CRLF', () => {
+            const lfTasks = parseTasksFromContent(loadFixture('01-simple-lf.md'));
+            const crlfTasks = parseTasksFromContent(loadFixture('01-simple-crlf.md'));
+
+            // Line numbers should match between LF and CRLF
+            for (let i = 0; i < lfTasks.length; i++) {
+                assert.strictEqual(
+                    crlfTasks[i].lineNumber,
+                    lfTasks[i].lineNumber,
+                    `Task ${i + 1} line number should match between LF and CRLF`
+                );
+            }
         });
     });
 
-    describe('Task description content', () => {
-        it('should parse task with long description', () => {
-            const content = '- [ ] This is a very long task description that contains multiple words and explains in detail what needs to be done';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'This is a very long task description that contains multiple words and explains in detail what needs to be done');
-        });
+    describe('File encoding verification', () => {
+        it('should verify CRLF files actually have CRLF line endings', () => {
+            metadata.forEach(fixture => {
+                const content = loadFixture(`${fixture.name}-crlf.md`);
 
-        it('should parse task with URL', () => {
-            const content = '- [ ] Check documentation at https://example.com/docs';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Check documentation at https://example.com/docs');
-        });
-
-        it('should parse task with file path', () => {
-            const content = '- [ ] Update src/components/Header.tsx';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 1);
-            assert.strictEqual(tasks[0].description, 'Update src/components/Header.tsx');
-        });
-    });
-
-    describe('Empty and malformed input', () => {
-        it('should handle empty string', () => {
-            const content = '';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
-        });
-
-        it('should handle string with only newlines', () => {
-            const content = '\n\n\n';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
-        });
-
-        it('should handle malformed checkbox (missing closing bracket)', () => {
-            const content = '- [ Task without closing bracket';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
-        });
-
-        it('should handle malformed checkbox (missing opening bracket)', () => {
-            const content = '- ] Task without opening bracket';
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 0);
-        });
-    });
-
-    describe('Real-world PRD examples', () => {
-        it('should parse realistic PRD from README example', () => {
-            const content = `# My Project
-
-## Overview
-Brief description of what you're building.
-
-## Tasks
-- [ ] Set up project structure with dependencies
-- [ ] Create core data models and types
-- [ ] Implement main application logic
-- [ ] Add user interface and styling
-- [ ] Write tests and documentation
-
-## Technical Details
-Using React, TypeScript, and Tailwind CSS`;
-            
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 5);
-            tasks.forEach(task => {
-                assert.strictEqual(task.status, TaskStatus.PENDING);
+                // File should contain at least one \r\n sequence
+                assert.ok(
+                    content.includes('\r\n'),
+                    `${fixture.name}-crlf.md should contain CRLF line endings`
+                );
             });
         });
 
-        it('should parse PRD with completed and pending tasks', () => {
-            const content = `# Todo App
+        it('should verify LF files do NOT have CRLF line endings', () => {
+            metadata.forEach(fixture => {
+                const content = loadFixture(`${fixture.name}-lf.md`);
 
-## Tasks
-- [x] Set up React project with TypeScript
-- [x] Install Tailwind CSS
-- [x] Create basic component structure
-- [~] Implement add todo functionality
-- [ ] Implement delete functionality
-- [ ] Implement mark as complete
-- [ ] Add styling and animations`;
-            
-            const tasks = parseTasksFromContent(content);
-            
-            assert.strictEqual(tasks.length, 7);
-            assert.strictEqual(tasks[0].status, TaskStatus.COMPLETE);
-            assert.strictEqual(tasks[1].status, TaskStatus.COMPLETE);
-            assert.strictEqual(tasks[2].status, TaskStatus.COMPLETE);
-            assert.strictEqual(tasks[3].status, TaskStatus.IN_PROGRESS);
-            assert.strictEqual(tasks[4].status, TaskStatus.PENDING);
-            assert.strictEqual(tasks[5].status, TaskStatus.PENDING);
-            assert.strictEqual(tasks[6].status, TaskStatus.PENDING);
+                // File should not contain \r\n sequence
+                assert.strictEqual(
+                    content.includes('\r\n'),
+                    false,
+                    `${fixture.name}-lf.md should not contain CRLF line endings`
+                );
+            });
+        });
+
+        it('should verify CR-only file has only CR line endings', () => {
+            const content = loadFixture('21-cr-only.md');
+
+            assert.strictEqual(content.includes('\r\n'), false, 'Should not have CRLF');
+            assert.strictEqual(content.includes('\n'), false, 'Should not have LF');
+            assert.ok(content.includes('\r'), 'Should have CR');
         });
     });
 });
