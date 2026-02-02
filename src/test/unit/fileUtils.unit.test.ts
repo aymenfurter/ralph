@@ -501,4 +501,204 @@ describe('FileUtils - Task Parsing Regex', () => {
             assert.ok(content.includes('\r'), 'Should have CR');
         });
     });
+
+    describe('Edge cases in task parsing', () => {
+        it('should parse empty content as no tasks', () => {
+            const tasks = parseTasksFromContent('');
+            assert.strictEqual(tasks.length, 0);
+        });
+
+        it('should parse content with no task markers as no tasks', () => {
+            const content = '# Header\n\nJust some text without tasks\n\nMore text.';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 0);
+        });
+
+        it('should parse single task correctly', () => {
+            const content = '- [ ] Single task';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].description, 'Single task');
+            assert.strictEqual(tasks[0].status, TaskStatus.PENDING);
+        });
+
+        it('should parse task with leading spaces in description', () => {
+            const content = '- [ ]    Task with leading spaces';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].description, 'Task with leading spaces');
+        });
+
+        it('should parse task with trailing spaces in description', () => {
+            const content = '- [ ] Task with trailing spaces   ';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].description, 'Task with trailing spaces');
+        });
+
+        it('should parse task with numbers in description', () => {
+            const content = '- [ ] Task 123 with numbers 456';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].description, 'Task 123 with numbers 456');
+        });
+
+        it('should parse task with special characters', () => {
+            const content = '- [ ] Task with special: @#$%^&*()';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.ok(tasks[0].description.includes('@#$%^&*()'));
+        });
+
+        it('should parse task with colon in description', () => {
+            const content = '- [ ] Task: this has a colon';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].description, 'Task: this has a colon');
+        });
+
+        it('should parse task with markdown links in description', () => {
+            const content = '- [ ] Add [link](https://example.com) to page';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.ok(tasks[0].description.includes('[link](https://example.com)'));
+        });
+
+        it('should parse task with inline code in description', () => {
+            const content = '- [ ] Fix bug in `function_name()` method';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.ok(tasks[0].description.includes('`function_name()`'));
+        });
+
+        it('should not parse malformed checkbox (missing space)', () => {
+            const content = '- [] This is not a valid task';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 0);
+        });
+
+        it('should not parse malformed checkbox (missing bracket)', () => {
+            const content = '- [ This is not a valid task';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 0);
+        });
+
+        it('should not parse plain bullet point as task', () => {
+            const content = '- This is not a task\n- Neither is this';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 0);
+        });
+
+        it('should generate unique task IDs', () => {
+            const content = '- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3';
+            const tasks = parseTasksFromContent(content);
+            const ids = tasks.map(t => t.id);
+            const uniqueIds = new Set(ids);
+            assert.strictEqual(uniqueIds.size, ids.length);
+        });
+
+        it('should preserve original raw line', () => {
+            const content = '- [ ] Original task text';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks[0].rawLine, '- [ ] Original task text');
+        });
+
+        it('should handle task at very first line', () => {
+            const content = '- [ ] First line task';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].lineNumber, 1);
+        });
+
+        it('should handle very long task description', () => {
+            const longDesc = 'A'.repeat(1000);
+            const content = `- [ ] ${longDesc}`;
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].description, longDesc);
+        });
+
+        it('should parse uppercase X as complete', () => {
+            const content = '- [X] Completed with uppercase X';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].status, TaskStatus.COMPLETE);
+        });
+
+        it('should parse lowercase x as complete', () => {
+            const content = '- [x] Completed with lowercase x';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].status, TaskStatus.COMPLETE);
+        });
+
+        it('should handle multiple spaces between checkbox and text', () => {
+            const content = '- [ ]     Multiple spaces before text';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.strictEqual(tasks[0].description, 'Multiple spaces before text');
+        });
+
+        it('should not parse indented tasks as top-level tasks', () => {
+            const content = '  - [ ] Indented task';
+            const tasks = parseTasksFromContent(content);
+            // Indented tasks should not match the regex
+            assert.strictEqual(tasks.length, 0);
+        });
+
+        it('should handle tasks mixed with other markdown content', () => {
+            const content = `# Header
+
+Some paragraph text.
+
+- [ ] Task 1
+
+More text here.
+
+- [x] Task 2
+
+## Another header
+
+- [ ] Task 3`;
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 3);
+            assert.strictEqual(tasks[0].status, TaskStatus.PENDING);
+            assert.strictEqual(tasks[1].status, TaskStatus.COMPLETE);
+            assert.strictEqual(tasks[2].status, TaskStatus.PENDING);
+        });
+
+        it('should handle content with only whitespace lines between tasks', () => {
+            const content = '- [ ] Task 1\n\n\n\n- [ ] Task 2';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 2);
+        });
+
+        it('should handle content ending without newline', () => {
+            const content = '- [ ] Task without trailing newline';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+        });
+
+        it('should handle task with emoji in description', () => {
+            const content = '- [ ] Add 🚀 emoji support';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.ok(tasks[0].description.includes('🚀'));
+        });
+
+        it('should handle task with unicode characters', () => {
+            const content = '- [ ] 日本語タスク（Japanese task）';
+            const tasks = parseTasksFromContent(content);
+            assert.strictEqual(tasks.length, 1);
+            assert.ok(tasks[0].description.includes('日本語'));
+        });
+
+        it('should not parse nested checkbox syntax', () => {
+            const content = '- [ ] Task with nested - [ ] checkbox';
+            const tasks = parseTasksFromContent(content);
+            // Should only parse the outer task
+            assert.strictEqual(tasks.length, 1);
+            assert.ok(tasks[0].description.includes('nested - [ ] checkbox'));
+        });
+    });
 });

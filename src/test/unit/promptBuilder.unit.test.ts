@@ -37,6 +37,51 @@ function applyCustomTemplate(template: string, variables: TemplateVariables): st
         .replace(/\{\{workspace\}\}/g, variables.workspace);
 }
 
+// Re-implementation of buildRequirementsSteps for testing
+interface TaskRequirements {
+    runTests: boolean;
+    runLinting: boolean;
+    runTypeCheck: boolean;
+    writeTests: boolean;
+    updateDocs: boolean;
+    commitChanges: boolean;
+}
+
+function buildRequirementsSteps(taskDescription: string, requirements: TaskRequirements): string[] {
+    const reqSteps: string[] = ['1. ✅ Implement the task'];
+    let stepNum = 2;
+
+    if (requirements.writeTests) {
+        reqSteps.push(`${stepNum}. ✅ Write unit tests for your implementation`);
+        stepNum++;
+    }
+    if (requirements.runTests) {
+        reqSteps.push(`${stepNum}. ✅ Run tests and ensure they pass`);
+        stepNum++;
+    }
+    if (requirements.runTypeCheck) {
+        reqSteps.push(`${stepNum}. ✅ Run type checking (tsc --noEmit or equivalent)`);
+        stepNum++;
+    }
+    if (requirements.runLinting) {
+        reqSteps.push(`${stepNum}. ✅ Run linting and fix any issues`);
+        stepNum++;
+    }
+    if (requirements.updateDocs) {
+        reqSteps.push(`${stepNum}. ✅ Update documentation if needed`);
+        stepNum++;
+    }
+    if (requirements.commitChanges) {
+        reqSteps.push(`${stepNum}. ✅ Commit your changes with a descriptive message`);
+        stepNum++;
+    }
+    reqSteps.push(`${stepNum}. ✅ UPDATE PRD.md: Change "- [ ] ${taskDescription}" to "- [x] ${taskDescription}"`);
+    stepNum++;
+    reqSteps.push(`${stepNum}. ✅ APPEND to progress.txt: Record what you completed`);
+
+    return reqSteps;
+}
+
 describe('PromptBuilder', () => {
     describe('sanitizeTaskDescription', () => {
         it('should return empty string for null input', () => {
@@ -218,6 +263,154 @@ Working in: {{workspace}}`;
             assert.ok(result.includes('Started project setup'));
             assert.ok(result.includes('1. Implement'));
             assert.ok(result.includes('Working in: /my/project'));
+        });
+
+        it('should handle special regex characters in variables', () => {
+            const template = 'Task: {{task}}';
+            const result = applyCustomTemplate(template, {
+                task: 'Fix $100 bug (regex: /test/)',
+                prd: '',
+                progress: '',
+                requirements: '',
+                workspace: ''
+            });
+            assert.strictEqual(result, 'Task: Fix $100 bug (regex: /test/)');
+        });
+
+        it('should handle unicode characters in variables', () => {
+            const template = '{{task}} - {{workspace}}';
+            const result = applyCustomTemplate(template, {
+                task: '日本語タスク 🚀',
+                prd: '',
+                progress: '',
+                requirements: '',
+                workspace: '/путь/到/项目'
+            });
+            assert.strictEqual(result, '日本語タスク 🚀 - /путь/到/项目');
+        });
+    });
+
+    describe('buildRequirementsSteps', () => {
+        const noRequirements: TaskRequirements = {
+            runTests: false,
+            runLinting: false,
+            runTypeCheck: false,
+            writeTests: false,
+            updateDocs: false,
+            commitChanges: false
+        };
+
+        it('should return minimum 3 steps with no requirements enabled', () => {
+            const steps = buildRequirementsSteps('My task', noRequirements);
+            assert.strictEqual(steps.length, 3);
+            assert.ok(steps[0].includes('Implement the task'));
+            assert.ok(steps[1].includes('UPDATE PRD.md'));
+            assert.ok(steps[2].includes('APPEND to progress.txt'));
+        });
+
+        it('should include task description in PRD update step', () => {
+            const steps = buildRequirementsSteps('Create login form', noRequirements);
+            assert.ok(steps.some(s => s.includes('Create login form')));
+        });
+
+        it('should add writeTests step when enabled', () => {
+            const requirements = { ...noRequirements, writeTests: true };
+            const steps = buildRequirementsSteps('My task', requirements);
+            assert.ok(steps.some(s => s.includes('Write unit tests')));
+        });
+
+        it('should add runTests step when enabled', () => {
+            const requirements = { ...noRequirements, runTests: true };
+            const steps = buildRequirementsSteps('My task', requirements);
+            assert.ok(steps.some(s => s.includes('Run tests')));
+        });
+
+        it('should add runTypeCheck step when enabled', () => {
+            const requirements = { ...noRequirements, runTypeCheck: true };
+            const steps = buildRequirementsSteps('My task', requirements);
+            assert.ok(steps.some(s => s.includes('type checking')));
+        });
+
+        it('should add runLinting step when enabled', () => {
+            const requirements = { ...noRequirements, runLinting: true };
+            const steps = buildRequirementsSteps('My task', requirements);
+            assert.ok(steps.some(s => s.includes('linting')));
+        });
+
+        it('should add updateDocs step when enabled', () => {
+            const requirements = { ...noRequirements, updateDocs: true };
+            const steps = buildRequirementsSteps('My task', requirements);
+            assert.ok(steps.some(s => s.includes('documentation')));
+        });
+
+        it('should add commitChanges step when enabled', () => {
+            const requirements = { ...noRequirements, commitChanges: true };
+            const steps = buildRequirementsSteps('My task', requirements);
+            assert.ok(steps.some(s => s.includes('Commit')));
+        });
+
+        it('should have correct step count with all requirements enabled', () => {
+            const allRequirements: TaskRequirements = {
+                runTests: true,
+                runLinting: true,
+                runTypeCheck: true,
+                writeTests: true,
+                updateDocs: true,
+                commitChanges: true
+            };
+            const steps = buildRequirementsSteps('My task', allRequirements);
+            // 1 implement + 6 requirements + 2 mandatory = 9 steps
+            assert.strictEqual(steps.length, 9);
+        });
+
+        it('should number steps sequentially', () => {
+            const allRequirements: TaskRequirements = {
+                runTests: true,
+                runLinting: true,
+                runTypeCheck: true,
+                writeTests: true,
+                updateDocs: true,
+                commitChanges: true
+            };
+            const steps = buildRequirementsSteps('My task', allRequirements);
+            
+            steps.forEach((step, index) => {
+                const expectedNum = index + 1;
+                assert.ok(step.startsWith(`${expectedNum}.`), `Step ${index} should start with "${expectedNum}." but got: ${step}`);
+            });
+        });
+
+        it('should preserve correct order: writeTests before runTests', () => {
+            const requirements = { ...noRequirements, writeTests: true, runTests: true };
+            const steps = buildRequirementsSteps('My task', requirements);
+            
+            const writeTestsIndex = steps.findIndex(s => s.includes('Write unit tests'));
+            const runTestsIndex = steps.findIndex(s => s.includes('Run tests'));
+            
+            assert.ok(writeTestsIndex < runTestsIndex, 'writeTests should come before runTests');
+        });
+
+        it('should always end with PRD update and progress append steps', () => {
+            const allRequirements: TaskRequirements = {
+                runTests: true,
+                runLinting: true,
+                runTypeCheck: true,
+                writeTests: true,
+                updateDocs: true,
+                commitChanges: true
+            };
+            const steps = buildRequirementsSteps('Test task', allRequirements);
+            
+            const lastStep = steps[steps.length - 1];
+            const secondToLastStep = steps[steps.length - 2];
+            
+            assert.ok(lastStep.includes('progress.txt'), 'Last step should mention progress.txt');
+            assert.ok(secondToLastStep.includes('PRD.md'), 'Second to last step should mention PRD.md');
+        });
+
+        it('should handle task description with special characters', () => {
+            const steps = buildRequirementsSteps('Fix bug #123: "Error" in <component>', noRequirements);
+            assert.ok(steps.some(s => s.includes('Fix bug #123')));
         });
     });
 });
