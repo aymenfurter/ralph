@@ -56,7 +56,7 @@ describe('TimerManager', () => {
         });
 
         it('should handle negative values', () => {
-            // Negative values should floor to 0 or negative seconds
+            // Negative values result in negative seconds
             assert.strictEqual(formatDuration(-1000), '-1s');
         });
 
