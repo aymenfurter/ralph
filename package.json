@@ -96,6 +96,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
+    "package": "mkdir -p dist && vsce package --out dist/ralph-$npm_package_version.vsix",
     "test": "node ./out/test/runTest.js",
     "pretest:unit": "npm run compile",
     "test:unit": "mocha --reporter spec out/test/unit/**/*.unit.test.js",
