@@ -1,7 +1,7 @@
-import fetch from 'node-fetch';
 import FormData from 'form-data';
 import * as fs from 'fs';
 import { getOpenAIKey } from './telegramConfig';
+import fetchShim from '../fetchShim';
 
 export async function transcribeAudio(filePath: string): Promise<string | null> {
     const apiKey = getOpenAIKey();
@@ -17,7 +17,7 @@ export async function transcribeAudio(filePath: string): Promise<string | null> 
         form.append('model', 'whisper-1');
         form.append('response_format', 'text');
 
-        const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        const response = await fetchShim('https://api.openai.com/v1/audio/transcriptions', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,

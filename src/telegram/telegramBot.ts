@@ -1,5 +1,5 @@
-import fetch from './fetchShim';
-import { getTelegramBotToken } from './telegramConfig';
+import fetch from '../fetchShim';
+import { getTelegramBotToken, getTelegramChatId } from './telegramConfig';
 
 export class TelegramBot {
     private token: string | undefined;
@@ -8,14 +8,13 @@ export class TelegramBot {
     private updateOffset: number = 0;
     private defaultChatId: string | undefined;
     private isFetching: boolean = false;
+    private fetchPromise: Promise<any[]> | null = null;
 
     constructor() {
         this.token = getTelegramBotToken();
         this.apiUrl = this.token ? `https://api.telegram.org/bot${this.token}` : '';
         this.updateOffset = 0;
 
-        // Use a function from config or fallback to env or leave undefined
-        const { getTelegramChatId } = require('./telegramConfig');
         this.defaultChatId = getTelegramChatId();
     }
 
@@ -116,28 +115,53 @@ export class TelegramBot {
      */
     async fetchBotMessages(timeoutSec: number = 10): Promise<any[]> {
         if (!this.isEnabled()) return [];
-        if (this.isFetching) return []; // Prevent concurrent fetches
+
+        // If already fetching, return the existing promise to queue up waiters
+        if (this.fetchPromise) {
+            return this.fetchPromise;
+        }
+
+        this.fetchPromise = (async () => {
+            try {
+                const url = `${this.apiUrl}/getUpdates?timeout=${timeoutSec}${this.updateOffset ? `&offset=${this.updateOffset}` : ''}`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.ok && Array.isArray(data.result)) {
+                    // Advance offset to last update_id + 1
+                    if (data.result.length > 0) {
+                        const lastUpdateId = data.result[data.result.length - 1].update_id;
+                        this.updateOffset = lastUpdateId + 1;
+                    }
+                    return data.result;
+                }
+                return [];
+            } catch (err) {
+                console.error('TelegramBot: fetchBotMessages error', err);
+                return [];
+            } finally {
+                this.fetchPromise = null;
+                this.isFetching = false;
+            }
+        })();
 
         this.isFetching = true;
-        try {
-            const url = `${this.apiUrl}/getUpdates?timeout=${timeoutSec}${this.updateOffset ? `&offset=${this.updateOffset}` : ''}`;
-            const res = await fetch(url);
-            const data = await res.json();
+        return this.fetchPromise;
+    }
 
-            if (data.ok && Array.isArray(data.result)) {
-                // Advance offset to last update_id + 1
-                if (data.result.length > 0) {
-                    const lastUpdateId = data.result[data.result.length - 1].update_id;
-                    this.updateOffset = lastUpdateId + 1;
-                }
-                return data.result;
-            }
-            return [];
+    async setMyCommands(commands: { command: string; description: string }[]): Promise<boolean> {
+        if (!this.isEnabled()) return false;
+        try {
+            const res = await fetch(`${this.apiUrl}/setMyCommands`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commands })
+            });
+            const data = await res.json();
+            return !!data.ok;
         } catch (err) {
-            console.error('TelegramBot: fetchBotMessages error', err);
-            return [];
-        } finally {
-            this.isFetching = false;
+            console.error('TelegramBot: setMyCommands failed', err);
+            return false;
         }
     }
 }

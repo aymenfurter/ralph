@@ -28,10 +28,6 @@
     "ralph",
     "autonomous"
   ],
-  "dependencies": {
-    "form-data": "^4.0.0",
-    "node-fetch": "^2.7.0"
-  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -107,14 +103,15 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "node build.js --production",
+    "watch": "node build.js --watch",
     "lint": "eslint src --ext ts",
-    "package": "mkdir -p dist && vsce package --out dist/ralph-$npm_package_version.vsix",
+    "package": "npx vsce package --out dist/ralph-$npm_package_version.vsix",
     "test": "node ./out/test/runTest.js",
-    "pretest:unit": "npm run compile",
+    "pretest": "tsc -b",
+    "pretest:unit": "tsc -b",
     "test:unit": "mocha --reporter spec out/test/unit/**/*.unit.test.js",
-    "test:telegram": "mocha --reporter spec out/test/unit/telegram*.unit.test.js",
+    "test:telegram": "mocha --reporter spec out/test/unit/telegram/*.unit.test.js",
     "pretest:coverage": "npm run compile",
     "test:coverage": "nyc npm run test:unit"
   },
@@ -128,6 +125,7 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@vscode/test-electron": "^2.4.1",
+    "esbuild": "^0.27.3",
     "eslint": "^8.57.0",
     "glob": "^10.4.5",
     "mocha": "^10.8.2",
@@ -138,5 +136,8 @@
   },
   "extensionDependencies": [
     "github.copilot-chat"
-  ]
+  ],
+  "dependencies": {
+    "form-data": "^4.0.5"
+  }
 }

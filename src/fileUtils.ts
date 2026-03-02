@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as http from 'http';
 import * as https from 'https';
-import fetch from 'node-fetch'; // Requires node-fetch ^2.x for CommonJS stream piping if needed, but we can use fs
 
 import { Task, TaskStatus } from './types';
 import { getConfig } from './config';

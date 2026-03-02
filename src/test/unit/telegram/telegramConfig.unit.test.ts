@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const envPath = path.join(__dirname, '..', '..', '..', '.env');
+const envPath = path.join(__dirname, '..', '..', '..', '..', '.env');
 
 function backupEnv(): string | undefined {
     try {
@@ -41,8 +41,8 @@ describe('telegramConfig.getTelegramBotToken', () => {
         try { if (fs.existsSync(envPath)) fs.unlinkSync(envPath); } catch (e) { }
 
         // Require module fresh
-        delete require.cache[require.resolve('../../telegramConfig')];
-        const { getTelegramBotToken } = require('../../telegramConfig');
+        delete require.cache[require.resolve('../../../telegram/telegramConfig')];
+        const { getTelegramBotToken } = require('../../../telegram/telegramConfig');
 
         const token = getTelegramBotToken();
         assert.strictEqual(token, undefined);
@@ -52,8 +52,8 @@ describe('telegramConfig.getTelegramBotToken', () => {
         const sample = 'RALPH_TELEGRAM_BOT_TOKEN=abc123\nOTHER=foo\n';
         fs.writeFileSync(envPath, sample, 'utf8');
 
-        delete require.cache[require.resolve('../../telegramConfig')];
-        const { getTelegramBotToken } = require('../../telegramConfig');
+        delete require.cache[require.resolve('../../../telegram/telegramConfig')];
+        const { getTelegramBotToken } = require('../../../telegram/telegramConfig');
 
         const token = getTelegramBotToken();
         assert.strictEqual(token, 'abc123');

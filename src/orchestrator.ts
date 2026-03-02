@@ -15,23 +15,17 @@ import { FileWatcherManager } from './fileWatchers';
 import { UIManager } from './uiManager';
 import { TaskRunner } from './taskRunner';
 
-import { TelegramBot } from './telegramBot';
-import { openCopilotWithPrompt, startFreshChatSession } from './copilotIntegration';
-import { getTelegramAllowedUsers, getTelegramStatusUpdateInterval } from './telegramConfig';
-import fetch from './fetchShim';
+import { TelegramBot } from './telegram/telegramBot';
+import { TelegramHandler, ILoopOrchestrator } from './telegram/telegramHandler';
 import * as cp from 'child_process';
 import * as util from 'util';
-import * as path from 'path'; // Added explicit import
-import { transcribeAudio } from './stt';
-import { downloadFile, ensureDirectoryExists } from './fileUtils';
 
 const execAsync = util.promisify(cp.exec);
 
-export class LoopOrchestrator {
+export class LoopOrchestrator implements ILoopOrchestrator {
     private lastError: string | null = null;
     private state: LoopExecutionState = LoopExecutionState.IDLE;
     private isPaused = false;
-    private isMuted: boolean = false;
     private sessionStartTime = 0;
     private lastStatusUpdate = 0;
 
@@ -44,10 +38,12 @@ export class LoopOrchestrator {
     // Polling interval handle
     private pollingInterval: NodeJS.Timeout | undefined;
 
-    private readonly telegramBot = new TelegramBot();
+    private readonly telegramHandler: TelegramHandler;
 
     private confirmationResolver?: (approved: boolean) => void;
     private pendingExecCommand: { command: string, chatId?: string } | null = null;
+
+    private isTransitioning = false;
 
     constructor(statusBar: RalphStatusBar) {
         this.ui = new UIManager(statusBar);
@@ -58,8 +54,9 @@ export class LoopOrchestrator {
             this.ui.addLog(message, highlight);
         });
 
+        this.telegramHandler = new TelegramHandler(this);
         // Start background polling for Telegram if enabled
-        this.startTelegramPolling();
+        this.telegramHandler.startPolling();
     }
 
     setPanel(panel: IRalphUI | null): void {
@@ -87,43 +84,53 @@ export class LoopOrchestrator {
     }
 
     async startLoop(): Promise<void> {
+        if (this.isTransitioning) {
+            this.ui.addLog('Operation in progress, please wait...');
+            return;
+        }
         if (this.state === LoopExecutionState.RUNNING) {
             this.ui.addLog('Loop is already running');
             return;
         }
 
-        const stats = await getTaskStatsAsync();
-        if (stats.pending === 0) {
-            this.ui.addLog('No pending tasks found. Add tasks to PRD.md first.');
-            vscode.window.showInformationMessage('Ralph: No pending tasks found in PRD.md');
-            return;
+        this.isTransitioning = true;
+        try {
+            const stats = await getTaskStatsAsync();
+            if (stats.pending === 0) {
+                this.ui.addLog('No pending tasks found. Add tasks to PRD.md first.');
+                vscode.window.showInformationMessage('Ralph: No pending tasks found in PRD.md');
+                return;
+            }
+
+            // Ensure progress.txt exists
+            await ensureProgressFileAsync();
+
+            this.taskRunner.clearHistory();
+            this.ui.clearLogs();
+            this.ui.updateHistory([]);
+
+            this.state = LoopExecutionState.RUNNING;
+            this.isPaused = false;
+            this.taskRunner.resetIterations();
+            this.sessionStartTime = Date.now();
+            this.lastStatusUpdate = Date.now();
+
+            await this.ui.updateStats();
+
+            // Quick poll for Telegram messages when loop starts
+            // Avoid awaiting here to not block loop startup, but initiate poll
+            this.telegramHandler.poll(false);
+
+            this.ui.addLog('🚀 Starting Ralph loop...');
+            await this.notifyTelegram('<b>Ralph loop started.</b>');
+            await this.updatePanelTiming();
+            this.ui.updateStatus('running', this.taskRunner.getIterationCount(), this.taskRunner.getCurrentTask());
+
+            await this.setupWatchers();
+            await this.runNextTask();
+        } finally {
+            this.isTransitioning = false;
         }
-
-        // Ensure progress.txt exists
-        await ensureProgressFileAsync();
-
-        this.taskRunner.clearHistory();
-        this.ui.clearLogs();
-        this.ui.updateHistory([]);
-
-        this.state = LoopExecutionState.RUNNING;
-        this.isPaused = false;
-        this.taskRunner.resetIterations();
-        this.sessionStartTime = Date.now();
-        this.lastStatusUpdate = Date.now();
-
-        await this.ui.updateStats();
-
-        // Quick poll for Telegram messages when loop starts
-        this.pollTelegramIfEnabled();
-
-        this.ui.addLog('🚀 Starting Ralph loop...');
-        await this.notifyTelegram('<b>Ralph loop started.</b>');
-        await this.updatePanelTiming();
-        this.ui.updateStatus('running', this.taskRunner.getIterationCount(), this.taskRunner.getCurrentTask());
-
-        await this.setupWatchers();
-        await this.runNextTask();
     }
 
     pauseLoop(): void {
@@ -139,7 +146,7 @@ export class LoopOrchestrator {
         this.ui.updateStatus('paused', this.taskRunner.getIterationCount(), this.taskRunner.getCurrentTask());
 
         // Poll Telegram when paused to pick up any remote commands
-        this.pollTelegramIfEnabled();
+        this.telegramHandler.poll();
     }
 
     resumeLoop(): void {
@@ -152,27 +159,37 @@ export class LoopOrchestrator {
         this.ui.updateStatus('running', this.taskRunner.getIterationCount(), this.taskRunner.getCurrentTask());
 
         // Poll Telegram after resume
-        this.pollTelegramIfEnabled();
+        this.telegramHandler.poll();
         this.runNextTask();
     }
 
     async stopLoop(): Promise<void> {
-        this.fileWatchers.dispose();
-        this.countdownTimer.stop();
-        this.inactivityMonitor.stop();
+        if (this.isTransitioning) {
+            this.ui.addLog('Operation in progress, please wait...');
+            return; // Or maybe queue it?
+        }
 
-        this.state = LoopExecutionState.IDLE;
-        this.isPaused = false;
+        this.isTransitioning = true;
+        try {
+            this.fileWatchers.dispose();
+            this.countdownTimer.stop();
+            this.inactivityMonitor.stop();
 
-        this.ui.updateStatus('idle', this.taskRunner.getIterationCount(), this.taskRunner.getCurrentTask());
-        this.ui.updateCountdown(0);
+            this.state = LoopExecutionState.IDLE;
+            this.isPaused = false;
 
-        this.ui.updateSessionTiming(0, this.taskRunner.getTaskHistory(), 0);
-        await this.ui.updateStats();
+            this.ui.updateStatus('idle', this.taskRunner.getIterationCount(), this.taskRunner.getCurrentTask());
+            this.ui.updateCountdown(0);
 
-        // Poll Telegram when loop stops
-        this.pollTelegramIfEnabled();
-        await this.notifyTelegram('<b>Ralph loop stopped.</b>');
+            this.ui.updateSessionTiming(0, this.taskRunner.getTaskHistory(), 0);
+            await this.ui.updateStats();
+
+            // Poll Telegram when loop stops
+            await this.telegramHandler.poll(false);
+            await this.notifyTelegram('<b>Ralph loop stopped.</b>');
+        } finally {
+            this.isTransitioning = false;
+        }
     }
 
     async runSingleStep(): Promise<void> {
@@ -195,7 +212,7 @@ export class LoopOrchestrator {
         this.ui.addLog(`Single step: ${task.description}`);
 
         // Quick poll to pick up remote commands before running single step
-        this.pollTelegramIfEnabled();
+        this.telegramHandler.poll();
 
         await this.taskRunner.triggerCopilotAgent(task.description);
     }
@@ -237,9 +254,7 @@ export class LoopOrchestrator {
     }
 
     dispose(): void {
-        if (this.pollingInterval) {
-            clearInterval(this.pollingInterval);
-        }
+        this.telegramHandler.stopPolling();
         this.stopLoop();
     }
 
@@ -254,7 +269,7 @@ export class LoopOrchestrator {
         this.fileWatchers.activityWatcher.start(() => {
             this.inactivityMonitor.recordActivity();
             // Check Telegram for any quick messages when activity occurs      
-            this.pollTelegramIfEnabled();
+            this.telegramHandler.poll();
         });
 
         this.inactivityMonitor.start(() => this.handleInactivity());
@@ -310,206 +325,18 @@ export class LoopOrchestrator {
         this.inactivityMonitor.setWaiting(true);
         this.ui.updateStatus('waiting', iteration, task.description);
         this.ui.addLog('Waiting for Copilot to complete and update PRD.md...');
-
-        // Telegram polling logic (short blocking poll while waiting)
-        await this.pollTelegramIfEnabled(2, true);
-    }
-
-    // Poll Telegram for updates and process them. If block=false, the fetch runs in background.
-    private async pollTelegramIfEnabled(timeoutSec: number = 1, block: boolean = false): Promise<void> {
-        if (!this.telegramBot.isEnabled()) return;
-        const task = this.telegramBot.fetchBotMessages(timeoutSec)
-            .then((updates) => {
-                if (updates.length > 0) {
-                    this.ui.addLog(`📨 Telegram: ${updates.length} new message(s) received.`);
-                    return this.processTelegramUpdates(updates);
-                }
-                return Promise.resolve();
-            })
-            .catch(() => Promise.resolve());
-
-        if (block) {
-            await task;
-        }
-    }
-
-    private async processTelegramUpdates(updates: any[]): Promise<void> {
-        const allowedUsers = getTelegramAllowedUsers();
-
-        for (const update of updates) {
-            let msg: string | undefined;
-            let senderId: string | undefined;
-            let senderUsername: string | undefined;
-            let chatId: string | undefined;
-
-            if (update.callback_query) {
-                msg = update.callback_query.data;
-                senderId = update.callback_query.from?.id?.toString();
-                senderUsername = update.callback_query.from?.username;
-                chatId = update.callback_query.message?.chat?.id?.toString();
-
-                // Answer the callback query to remove loading state in Telegram
-                if (this.telegramBot.isEnabled()) {
-                    await this.telegramBot.answerCallbackQuery(update.callback_query.id);
-                }
-            } else if (update.message) {
-                senderId = update.message.from?.id?.toString();
-                senderUsername = update.message.from?.username;
-                chatId = update.message.chat?.id?.toString();
-
-                if (update.message.voice) {
-                    // Handle voice message
-                    if (allowedUsers.length > 0 &&
-                        (!senderId || !allowedUsers.includes(senderId)) &&
-                        (!senderUsername || !allowedUsers.includes(senderUsername))) {
-                        this.ui.addLog(`Telegram: Blocked unauthorized voice message from user ${senderUsername || senderId}`);
-                        continue;
-                    }
-
-                    const result = await this.processVoiceMessage(update.message.voice, chatId!);
-                    msg = result || undefined;
-                } else {
-                    msg = update.message.text?.trim();
-                }
-            }
-
-            if (!msg) continue;
-
-            if (allowedUsers.length > 0 &&
-                (!senderId || !allowedUsers.includes(senderId)) &&
-                (!senderUsername || !allowedUsers.includes(senderUsername))) {
-                this.ui.addLog(`Telegram: Blocked unauthorized message from user ${senderUsername || senderId}`);
-                continue;
-            }
-
-            if (/^\/approve$/i.test(msg)) {
-                if (this.state === LoopExecutionState.WAITING_FOR_CONFIRMATION && this.confirmationResolver) {
-                    this.confirmationResolver(true);
-                    this.ui.addLog('Telegram: Confirmed via /approve.');
-                    await this.notifyTelegram('✅ Approved.', chatId);
-                    continue; // Skip other handlers
-                } else if (this.state !== LoopExecutionState.WAITING_FOR_CONFIRMATION) {
-                    await this.notifyTelegram('No pending confirmation request.', chatId);
-                    continue;
-                }
-            } else if (/^\/reject$/i.test(msg)) {
-                if (this.state === LoopExecutionState.WAITING_FOR_CONFIRMATION && this.confirmationResolver) {
-                    this.confirmationResolver(false);
-                    this.ui.addLog('Telegram: Rejected via /reject.');
-                    await this.notifyTelegram('❌ Rejected.', chatId);
-                    continue; // Skip other handlers
-                } else if (this.state !== LoopExecutionState.WAITING_FOR_CONFIRMATION) {
-                    await this.notifyTelegram('No pending confirmation request.', chatId);
-                    continue;
-                }
-            }
-
-            if (/^\/start(?:-loop)?$/i.test(msg)) {
-                await this.startLoop();
-                await this.notifyTelegram('<b>Loop started by Telegram command.</b>', chatId);
-                this.ui.addLog('Telegram: Loop started.');
-            } else if (/^\/pause$/i.test(msg)) {
-                this.pauseLoop();
-                await this.notifyTelegram('<b>Loop paused by Telegram command.</b>', chatId);
-                this.ui.addLog('Telegram: Loop paused.');
-            } else if (/^\/resume$/i.test(msg)) {
-                this.resumeLoop();
-                await this.notifyTelegram('<b>Loop resumed by Telegram command.</b>', chatId);
-                this.ui.addLog('Telegram: Loop resumed.');
-            } else if (/^\/stop$/i.test(msg)) {
-                await this.stopLoop();
-                await this.notifyTelegram('<b>Loop stopped by Telegram command.</b>', chatId);
-                this.ui.addLog('Telegram: Loop stopped.');
-            } else if (/^\/mute$/i.test(msg)) {
-                this.isMuted = true;
-                await this.notifyTelegram('<i>Notifications muted. Only errors and direct replies will be sent.</i>', chatId);
-                this.ui.addLog('Telegram: Notifications muted.');
-            } else if (/^\/unmute$/i.test(msg)) {
-                this.isMuted = false;
-                await this.notifyTelegram('<i>Notifications unmuted. All updates will be sent.</i>', chatId);
-                this.ui.addLog('Telegram: Notifications unmuted.');
-            } else if (/^\/continue$/i.test(msg)) {
-                this.ui.addLog('Telegram: Sending "continue" to Copilot...');
-                await openCopilotWithPrompt('yes, continue', { freshChat: false });
-                await this.notifyTelegram('Sent "yes, continue" to Copilot.', chatId);
-            } else if (/^\/mark_done$/i.test(msg)) {
-                this.ui.addLog('Telegram: Asking Copilot to update PRD...');
-                await openCopilotWithPrompt('Please mark the task as explicitly completed in PRD.md', { freshChat: false });
-                await this.notifyTelegram('Asked Copilot to update PRD.md.', chatId);
-            } else if (/^\/chat(\s+.*)?$/i.test(msg)) {
-                const m = msg.match(/^\/chat\s+(.*)$/i);
-                const prompt = m ? m[1].trim() : '';
-                if (!prompt) {
-                    await this.notifyTelegram('Usage: /chat &lt;prompt&gt; — provide a prompt to send to Copilot Chat', chatId);
-                    this.ui.addLog('Telegram: /chat used without prompt.');
-                } else {
-                    this.ui.addLog(`Telegram: Sending prompt to Copilot: ${prompt}`);
-                    try {
-                        const result = await openCopilotWithPrompt(prompt, { freshChat: false });
-                        if (result === 'agent') {
-                            await this.notifyTelegram('Prompt sent to Copilot Agent (edit session opened).', chatId);
-                        } else if (result === 'chat') {
-                            await this.notifyTelegram('Prompt opened in Copilot Chat.', chatId);
-                        } else {
-                            await this.notifyTelegram('Prompt copied to clipboard — paste into Copilot Chat manually.', chatId);
-                        }
-                        this.ui.addLog('Telegram: /chat processed.');
-                    } catch (err) {
-                        this.ui.addLog('Telegram: /chat failed.');
-                        await this.notifyTelegram('<b>Failed to send prompt to Copilot Chat.</b>', chatId);
-                    }
-                }
-            } else {
-                await this.handleTelegramCommand(msg, chatId);
-            }
-        }
-    }
-
-    private async processVoiceMessage(voice: any, chatId: string): Promise<string | null> {
-        this.ui.addLog('Telegram: Voice message received.');
-        await this.notifyTelegram('🎤 <i>Voice message received, processing...</i>', chatId);
-
-        const fileLink = await this.telegramBot.getFileLink(voice.file_id);
-        if (!fileLink) {
-            await this.notifyTelegram('❌ Failed to get voice file link.', chatId);
-            return null;
-        }
-
-        const workspaceRoot = getWorkspaceRoot();
-        if (!workspaceRoot) {
-            await this.notifyTelegram('❌ Ralph not active (no workspace).', chatId);
-            return null;
-        }
-
-        const voiceDir = path.join(workspaceRoot, '.ralph_voice');
-        ensureDirectoryExists(voiceDir);
-
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filePath = path.join(voiceDir, `voice_${timestamp}_${voice.file_unique_id || 'unknown'}.ogg`);
-        try {
-            await downloadFile(fileLink, filePath);
-            this.ui.addLog(`Telegram: Voice downloaded to ${filePath}`);
-        } catch (err) {
-            console.error('Download failed', err);
-            await this.notifyTelegram('❌ Failed to download voice message.', chatId);
-            return null;
-        }
-
-        const text = await transcribeAudio(filePath);
-        if (!text) {
-            await this.notifyTelegram('⚠️ Voice received but transcription failed (check logs or OPENAI_API_KEY). Audio saved locally.', chatId);
-            return null;
-        }
-
-        await this.notifyTelegram(`🗣️ <b>Transcribed:</b> "${TelegramBot.escapeHtml(text)}"`, chatId);
-        return text;
     }
 
     private async handlePrdChange(newContent: string): Promise<void> {
+        if (this.isTransitioning) return;
+        this.isTransitioning = true;
         try {
+            // Check if PRD is fully written (sometimes file events fire on partial writes)
+            if (!newContent.trim()) return;
+
             this.ui.addLog('📝 PRD.md changed - checking task status...');
             // Poll Telegram immediately on PRD changes (non-blocking)
-            this.pollTelegramIfEnabled();
+            this.telegramHandler.poll();
             this.inactivityMonitor.recordActivity();
             this.fileWatchers.prdWatcher.updateContent(newContent);
 
@@ -553,6 +380,8 @@ export class LoopOrchestrator {
             } catch (err) {
                 // swallow
             }
+        } finally {
+            this.isTransitioning = false;
         }
     }
 
@@ -586,9 +415,6 @@ export class LoopOrchestrator {
             false,
             stuckKeyboard as any
         );
-
-        // Poll Telegram before prompting the user to see if there's a remote response
-        await this.pollTelegramIfEnabled(2, true);
 
         const action = await vscode.window.showWarningMessage(
             `Ralph: No file changes detected for 60 seconds. Is Copilot still working on the task?`,
@@ -651,13 +477,13 @@ export class LoopOrchestrator {
         this.ui.updateSessionTiming(this.sessionStartTime, this.taskRunner.getTaskHistory(), stats.pending);
     }
 
-    private async notifyTelegram(message: string, chatId?: string, isVerbose: boolean = false, customKeyboard?: any): Promise<void> {
-        if (isVerbose && this.isMuted) return;
+    public async notifyTelegram(message: string, chatId?: string, isVerbose: boolean = false, customKeyboard?: any): Promise<void> {
+        if (isVerbose && this.telegramHandler.isNotificationsMuted()) return;
 
-        if (this.telegramBot.isEnabled()) {
+        if (this.telegramHandler.isEnabled()) {
             try {
                 const keyboard = customKeyboard || this.getInlineKeyboard();
-                await this.telegramBot.sendMessage(`[Ralph] ${message}`, chatId, keyboard);
+                await this.telegramHandler.notify(message, chatId, false, keyboard);
             } catch (err) {
                 this.ui.addLog(`Telegram notification failed: ${err}`);
             }
@@ -696,7 +522,7 @@ export class LoopOrchestrator {
     }
 
     // Handler for Telegram commands (edge-case intervention)
-    private async handleTelegramCommand(cmd: string, chatId?: string): Promise<void> {
+    public async handleGenericTelegramCommand(cmd: string, chatId?: string): Promise<void> {
         if (/(stuck|reset)/i.test(cmd)) {
             this.ui.addLog('Telegram: Stuck counter reset.');
             await this.notifyTelegram('Stuck counter reset', chatId);
@@ -704,11 +530,11 @@ export class LoopOrchestrator {
             this.ui.addLog('Telegram: Ambiguous counter reset.');
             await this.notifyTelegram('Ambiguous counter reset', chatId);
         } else if (/^\/mute$/i.test(cmd)) {
-            this.isMuted = true;
+            this.telegramHandler.setMuted(true);
             this.ui.addLog('Telegram: Muted verbose notifications.');
             await this.notifyTelegram('Verbose notifications muted. You will only receive important updates.', chatId);
         } else if (/^\/unmute$/i.test(cmd)) {
-            this.isMuted = false;
+            this.telegramHandler.setMuted(false);
             this.ui.addLog('Telegram: Unmuted verbose notifications.');
             await this.notifyTelegram('Verbose notifications unmuted. You will receive all updates.', chatId);
         } else if (/^\/status|\/stats/i.test(cmd) || /status|stats/i.test(cmd)) {
@@ -735,9 +561,10 @@ export class LoopOrchestrator {
                     ]]
                 };
                 const escaped = TelegramBot.escapeHtml(execCmd);
-                await this.telegramBot.sendMessage(
+                await this.telegramHandler.notify(
                     `⚠️ <b>Confirm Execution:</b>\nRunning the following shell command:\n<pre>${escaped}</pre>`,
                     chatId,
+                    false,
                     keyboard
                 );
             } else {
@@ -854,8 +681,6 @@ export class LoopOrchestrator {
                 } else if (entries.length === 0) {
                     await this.notifyTelegram(`📂 Directory is empty: ${TelegramBot.escapeHtml(pathArg)}`, chatId);
                 } else {
-                    let msg = `<b>📂 Contents of ${TelegramBot.escapeHtml(pathArg)}:</b>\n\n`;
-
                     entries.sort((a, b) => {
                         if (a.isDirectory === b.isDirectory) return a.name.localeCompare(b.name);
                         return a.isDirectory ? -1 : 1;
@@ -866,14 +691,23 @@ export class LoopOrchestrator {
                         return `${icon} ${TelegramBot.escapeHtml(e.name)}`;
                     });
 
-                    const content = lines.join('\n');
-                    if (msg.length + content.length > 4000) {
-                        msg += content.substring(0, 4000 - msg.length) + '\n... (truncated)';
-                    } else {
-                        msg += content;
-                    }
+                    let chunks: string[] = [];
+                    let currentChunk = `<b>📂 Contents of ${TelegramBot.escapeHtml(pathArg)}:</b>\n\n`;
 
-                    await this.notifyTelegram(msg, chatId);
+                    for (const line of lines) {
+                        if (currentChunk.length + line.length > 3000) {
+                            chunks.push(currentChunk);
+                            currentChunk = line + '\n';
+                        } else {
+                            currentChunk += line + '\n';
+                        }
+                    }
+                    if (currentChunk) chunks.push(currentChunk);
+
+                    for (const chunk of chunks) {
+                        await this.notifyTelegram(chunk, chatId);
+                        if (chunks.length > 1) await new Promise(r => setTimeout(r, 200));
+                    }
                 }
             } catch (err) {
                 await this.notifyTelegram(`Error listing directory: ${TelegramBot.escapeHtml(String(err))}`, chatId);
@@ -881,6 +715,12 @@ export class LoopOrchestrator {
         } else if (/^\/cat(\s+.*)?$/i.test(cmd)) {
             const m = cmd.match(/^\/cat\s+(.*)$/i);
             const pathArg = m ? m[1].trim() : '';
+
+            // Security check for sensitive files
+            if (pathArg.toLowerCase() === '.env' || pathArg.endsWith('/.env') || pathArg.endsWith('\\.env')) {
+                await this.notifyTelegram('⚠️ Access denied to configuration files.', chatId);
+                return;
+            }
 
             if (!pathArg) {
                 await this.notifyTelegram('Usage: /cat <path> — show file content', chatId);
@@ -892,12 +732,20 @@ export class LoopOrchestrator {
                         await this.notifyTelegram(`❌ File not found: ${TelegramBot.escapeHtml(pathArg)}`, chatId);
                     } else {
                         const escaped = TelegramBot.escapeHtml(content);
-                        // Telegram message limit is 4096 chars
-                        let msg = `<b>File: ${TelegramBot.escapeHtml(pathArg)}</b>\n<pre>${escaped}</pre>`;
-                        if (msg.length > 4000) {
-                            msg = msg.substring(0, 4000) + '\n... (truncated)';
+                        // Telegram message limit is ~4096 chars
+                        if (escaped.length < 3000) {
+                            await this.notifyTelegram(`<b>File: ${TelegramBot.escapeHtml(pathArg)}</b>\n<pre>${escaped}</pre>`, chatId);
+                        } else {
+                            await this.notifyTelegram(`<b>File: ${TelegramBot.escapeHtml(pathArg)}</b> (Large file, sending in chunks...)`, chatId);
+
+                            const chunkSize = 3000;
+                            for (let i = 0; i < escaped.length; i += chunkSize) {
+                                const chunk = escaped.substring(i, i + chunkSize);
+                                await this.notifyTelegram(`<pre>${chunk}</pre>`, chatId);
+                                // Prevent rate limiting issues
+                                await new Promise(r => setTimeout(r, 300));
+                            }
                         }
-                        await this.notifyTelegram(msg, chatId);
                     }
                 } catch (err) {
                     await this.notifyTelegram(`Error reading file: ${TelegramBot.escapeHtml(String(err))}`, chatId);
@@ -947,36 +795,9 @@ export class LoopOrchestrator {
         }
     }
 
-    private async startTelegramPolling(): Promise<void> {
-        if (!this.telegramBot.isEnabled()) return;
-
-        // Clear any existing interval to be safe
-        if (this.pollingInterval) {
-            clearInterval(this.pollingInterval);
-        }
-
-        // Poll every 30 seconds to be safe and responsive
-        this.pollingInterval = setInterval(async () => {
-            await this.pollTelegramIfEnabled(1, false);
-
-            // Periodic status update check
-            const intervalMinutes = getTelegramStatusUpdateInterval();
-            if (intervalMinutes > 0) {
-                const intervalMs = intervalMinutes * 60 * 1000;
-                if (Date.now() - this.lastStatusUpdate >= intervalMs) {
-                    this.lastStatusUpdate = Date.now();
-                    const message = await this.getSessionStatsMessage();
-                    await this.notifyTelegram(`🔔 Periodic Update:\n${message}`);
-                }
-            }
-        }, 30000);
-
-        // Initial poll
-        await this.pollTelegramIfEnabled(1, false);
-    }
 
     async waitForConfirmation(message: string): Promise<boolean> {
-        if (!this.telegramBot.isEnabled()) {
+        if (!this.telegramHandler.isEnabled()) {
             return true; // Auto-approve if Telegram is disabled
         }
 
@@ -989,7 +810,7 @@ export class LoopOrchestrator {
 
         // Poll more frequently while waiting
         const tempPollInterval = setInterval(() => {
-            this.pollTelegramIfEnabled(1);
+            this.telegramHandler.poll(false, 1);
         }, 2000);
 
         return new Promise<boolean>((resolve) => {
@@ -1002,7 +823,19 @@ export class LoopOrchestrator {
         });
     }
 
-    private async getSessionStatsMessage(): Promise<string> {
+    getLogCallback(): (message: string, highlight?: boolean) => void {
+        return (message, highlight) => this.ui.addLog(message, highlight);
+    }
+
+    getState(): LoopExecutionState {
+        return this.state;
+    }
+
+    getConfirmationResolver(): ((approved: boolean) => void) | undefined {
+        return this.confirmationResolver;
+    }
+
+    public async getSessionStatsMessage(): Promise<string> {
         const stats = await getTaskStatsAsync();
         const currentTask = this.taskRunner.getCurrentTask();
         const elapsedMs = this.sessionStartTime ? Date.now() - this.sessionStartTime : 0;
@@ -1011,7 +844,7 @@ export class LoopOrchestrator {
         const lastError = this.lastError || 'None';
         let message = `<b>Ralph Session Stats:</b>\n`;
         message += `<b>State:</b> ${state}\n`;
-        message += `<b>Muted:</b> ${this.isMuted ? 'Yes' : 'No'}\n`;
+        message += `<b>Muted:</b> ${this.telegramHandler.isNotificationsMuted() ? 'Yes' : 'No'}\n`;
         message += `<b>Current Task:</b> <i>${TelegramBot.escapeHtml(currentTask || 'None')}</i>\n`;
         message += `<b>Progress:</b> ${stats.completed}/${stats.total} complete\n`;
         message += `<b>Elapsed Time:</b> ${elapsed}\n`;

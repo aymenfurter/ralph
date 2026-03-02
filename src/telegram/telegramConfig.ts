@@ -3,7 +3,7 @@ import * as path from 'path';
 
 export function getTelegramBotToken(): string | undefined {
     // Try to load .env from workspace root
-    const envPath = path.join(__dirname, '..', '.env');
+    const envPath = path.join(__dirname, '..', '..', '.env');
     if (!fs.existsSync(envPath)) return undefined;
     const envContent = fs.readFileSync(envPath, 'utf-8');
     const match = envContent.match(/^RALPH_TELEGRAM_BOT_TOKEN=(.+)$/m);
@@ -11,7 +11,7 @@ export function getTelegramBotToken(): string | undefined {
 }
 
 export function getTelegramChatId(): string | undefined {
-    const envPath = path.join(__dirname, '..', '.env');
+    const envPath = path.join(__dirname, '..', '..', '.env');
     if (!fs.existsSync(envPath)) return undefined;
     const envContent = fs.readFileSync(envPath, 'utf-8');
     const match = envContent.match(/^RALPH_TELEGRAM_CHAT_ID=(.+)$/m);
@@ -19,7 +19,7 @@ export function getTelegramChatId(): string | undefined {
 }
 
 export function getTelegramAllowedUsers(): string[] {
-    const envPath = path.join(__dirname, '..', '.env');
+    const envPath = path.join(__dirname, '..', '..', '.env');
     if (!fs.existsSync(envPath)) return [];
     const envContent = fs.readFileSync(envPath, 'utf-8');
     const match = envContent.match(/^RALPH_TELEGRAM_ALLOWED_USERS=(.+)$/m);
@@ -28,7 +28,7 @@ export function getTelegramAllowedUsers(): string[] {
 }
 
 export function getTelegramStatusUpdateInterval(): number {
-    const envPath = path.join(__dirname, '..', '.env');
+    const envPath = path.join(__dirname, '..', '..', '.env');
     if (!fs.existsSync(envPath)) return 0;
     const envContent = fs.readFileSync(envPath, 'utf-8');
     const match = envContent.match(/^RALPH_TELEGRAM_STATUS_INTERVAL=(.+)$/m);
@@ -39,7 +39,7 @@ export function getTelegramStatusUpdateInterval(): number {
 
 export function getOpenAIKey(): string | undefined {
     // Try to load .env from workspace root
-    const envPath = path.join(__dirname, '..', '.env');
+    const envPath = path.join(__dirname, '..', '..', '.env');
     if (!fs.existsSync(envPath)) return undefined;
     const envContent = fs.readFileSync(envPath, 'utf-8');
     const match = envContent.match(/^(?:RALPH_)?OPENAI_API_KEY=(.+)$/m);

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const envPath = path.join(__dirname, '..', '..', '..', '.env');
+const envPath = path.join(__dirname, '..', '..', '..', '..', '.env');
 
 function backupEnv(): string | undefined {
     try {
@@ -31,8 +31,8 @@ describe('TelegramBot', () => {
 
     it('is disabled when no token', () => {
         try { if (fs.existsSync(envPath)) fs.unlinkSync(envPath); } catch (e) { }
-        delete require.cache[require.resolve('../../telegramBot')];
-        const { TelegramBot } = require('../../telegramBot');
+        delete require.cache[require.resolve('../../../telegram/telegramBot')];
+        const { TelegramBot } = require('../../../telegram/telegramBot');
         const bot = new TelegramBot();
         assert.strictEqual(bot.isEnabled(), false);
         assert.strictEqual(bot.getApiUrl(), '');
@@ -42,8 +42,8 @@ describe('TelegramBot', () => {
         fs.writeFileSync(envPath, 'RALPH_TELEGRAM_BOT_TOKEN=tok-xyz\n', 'utf8');
 
         // Prepare a mock fetch and ensure telegramBot imports it fresh
-        delete require.cache[require.resolve('../../fetchShim')];
-        delete require.cache[require.resolve('../../telegramBot')];
+        delete require.cache[require.resolve('../../../fetchShim')];
+        delete require.cache[require.resolve('../../../telegram/telegramBot')];
 
         let lastUrl = '';
 
@@ -55,10 +55,10 @@ describe('TelegramBot', () => {
         };
 
         // Inject mock
-        const fetchShim = require('../../fetchShim');
+        const fetchShim = require('../../../fetchShim');
         fetchShim.default = mockFetch;
 
-        const { TelegramBot } = require('../../telegramBot');
+        const { TelegramBot } = require('../../../telegram/telegramBot');
         const bot = new TelegramBot();
 
         assert.strictEqual(bot.isEnabled(), true);
@@ -71,8 +71,8 @@ describe('TelegramBot', () => {
 
     it('fetchBotMessages advances offset and returns results', async () => {
         // Token already present from previous test; re-require fresh modules to reset state
-        delete require.cache[require.resolve('../../fetchShim')];
-        delete require.cache[require.resolve('../../telegramBot')];
+        delete require.cache[require.resolve('../../../fetchShim')];
+        delete require.cache[require.resolve('../../../telegram/telegramBot')];
 
         let calls: string[] = [];
 
@@ -89,10 +89,10 @@ describe('TelegramBot', () => {
             return { json: async () => ({ ok: false, result: [] }) };
         };
 
-        const fetchShim = require('../../fetchShim');
+        const fetchShim = require('../../../fetchShim');
         fetchShim.default = mockFetch;
 
-        const { TelegramBot } = require('../../telegramBot');
+        const { TelegramBot } = require('../../../telegram/telegramBot');
         const bot = new TelegramBot();
 
         const first = await bot.fetchBotMessages(1);
@@ -113,7 +113,7 @@ describe('TelegramBot', () => {
     });
 
     it('escapes HTML special characters correctly', () => {
-        const { TelegramBot } = require('../../telegramBot');
+        const { TelegramBot } = require('../../../telegram/telegramBot');
         assert.strictEqual(TelegramBot.escapeHtml('<script>alert("x")</script>'), '&lt;script&gt;alert("x")&lt;/script&gt;');
         assert.strictEqual(TelegramBot.escapeHtml('User & Company'), 'User &amp; Company');
         assert.strictEqual(TelegramBot.escapeHtml('Normal text'), 'Normal text');
@@ -122,8 +122,8 @@ describe('TelegramBot', () => {
 
     it('sends messages with parse_mode=HTML by default', async () => {
         // Reuse similar setup
-        delete require.cache[require.resolve('../../fetchShim')];
-        delete require.cache[require.resolve('../../telegramBot')];
+        delete require.cache[require.resolve('../../../fetchShim')];
+        delete require.cache[require.resolve('../../../telegram/telegramBot')];
 
         let lastBody: any;
 
@@ -135,10 +135,10 @@ describe('TelegramBot', () => {
             return { json: async () => ({ ok: false }) };
         };
 
-        const fetchShim = require('../../fetchShim');
+        const fetchShim = require('../../../fetchShim');
         fetchShim.default = mockFetch;
 
-        const { TelegramBot } = require('../../telegramBot');
+        const { TelegramBot } = require('../../../telegram/telegramBot');
         const bot = new TelegramBot();
 
         // Mock token so it's enabled
