@@ -1,6 +1,7 @@
 export enum LoopExecutionState {
     IDLE = 'IDLE',
-    RUNNING = 'RUNNING'
+    RUNNING = 'RUNNING',
+    WAITING_FOR_CONFIRMATION = 'WAITING_FOR_CONFIRMATION'
 }
 
 export interface Task {

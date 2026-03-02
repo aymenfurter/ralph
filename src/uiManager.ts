@@ -71,6 +71,14 @@ export class UIManager {
         this.sidebarView?.addLog(message, highlight);
     }
 
+    getRecentLogs(count: number): string[] {
+        if (count <= 0) {
+            return [];
+        }
+        const startIndex = Math.max(this.logs.length - count, 0);
+        return this.logs.slice(startIndex);
+    }
+
     clearLogs(): void {
         this.logs = [];
     }

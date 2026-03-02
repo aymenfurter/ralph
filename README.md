@@ -1,3 +1,32 @@
+# Ralph — Telegram Bot Integration Example
+
+This project (Ralph) optionally integrates with Telegram to provide remote control, notifications, and on-demand session stats.
+
+Quick start
+
+1. Copy `.env.example` to `.env` in the project root.
+2. Open `.env` and set your Telegram bot token (create a bot with @BotFather):
+
+```
+RALPH_TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRstuVWxyZ
+```
+
+3. Start Ralph as usual. When `RALPH_TELEGRAM_BOT_TOKEN` is present, Telegram features (commands, notifications) will be enabled.
+
+Common commands
+
+- `/start` — Start a Ralph session
+- `/pause` — Pause current session
+- `/stop` — Stop Ralph session
+- `/status` or `/stats` — Get current session status
+- `/help` — Show available commands
+
+Notes
+
+- Telegram integration is optional: Ralph runs normally without the token.
+- Use `.env` to keep secrets out of version control.
+
+For more details see `PRD.md` under "Ralph Telegram Bot Integration".
 <p align="center">
   <img src="assets/demo.gif" alt="Ralph Demo" width="100%">
 </p>

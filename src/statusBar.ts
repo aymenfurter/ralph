@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-export type LoopStatus = 'idle' | 'running' | 'paused' | 'waiting';
+export type LoopStatus = 'idle' | 'running' | 'paused' | 'waiting' | 'waiting_for_confirmation';
 
 export class RalphStatusBar {
     private statusItem: vscode.StatusBarItem;

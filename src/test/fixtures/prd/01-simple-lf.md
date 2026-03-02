@@ -9,3 +9,4 @@ Brief description of what you're building.
 - [ ] Implement main application logic
 - [ ] Add user interface and styling
 - [ ] Write tests and documentation
+

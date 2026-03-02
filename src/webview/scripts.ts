@@ -117,7 +117,8 @@ export function getClientScripts(): string {
                 'idle': 'Ready',
                 'running': 'Working',
                 'waiting': 'Working',
-                'paused': 'Paused'
+                'paused': 'Paused',
+                'waiting_for_confirmation': 'Waiting for Confirmation'
             };
             if (statusText) {
                 statusText.textContent = statusLabels[status] || status;
@@ -131,7 +132,7 @@ export function getClientScripts(): string {
                 taskText.textContent = taskInfo;
             }
 
-            const isRunning = status === 'running' || status === 'waiting';
+            const isRunning = status === 'running' || status === 'waiting' || status === 'waiting_for_confirmation';
             const isPaused = status === 'paused';
 
             if (btnStart) btnStart.disabled = isRunning || isPaused;

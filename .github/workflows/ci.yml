@@ -31,3 +31,6 @@ jobs:
 
       - name: Run unit tests
         run: npm run test:unit
+
+      - name: Run telegram unit tests
+        run: npm run test:telegram
