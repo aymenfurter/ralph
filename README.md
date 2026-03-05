@@ -4,14 +4,29 @@ This project (Ralph) optionally integrates with Telegram to provide remote contr
 
 Quick start
 
-1. Copy `.env.example` to `.env` in the project root.
-2. Open `.env` and set your Telegram bot token (create a bot with @BotFather):
+1. Set up your environment variables:
 
-```
-RALPH_TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRstuVWxyZ
-```
+   ```bash
+   source setup_env.sh
+   ```
 
-3. Start Ralph as usual. When `RALPH_TELEGRAM_BOT_TOKEN` is present, Telegram features (commands, notifications) will be enabled.
+   If `.env` is missing, this script will create `.env.template`.
+   Copy `.env.template` to `.env` and fill in your values (e.g., Telegram Bot Token, Chat ID, etc.).
+
+   ```bash
+   cp .env.template .env
+   # Edit .env with your secrets
+   ```
+
+2. Load the environment variables:
+
+   ```bash
+   source setup_env.sh
+   ```
+
+   Unlike previous versions, Ralph now reads configuration directly from environment variables. You must have these variables exported in your shell or environment before starting the extension.
+
+3. Start Ralph as usual. When `RALPH_TELEGRAM_BOT_TOKEN` is present in the environment, Telegram features (commands, notifications) will be enabled.
 
 Common commands
 

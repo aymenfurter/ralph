@@ -6,7 +6,7 @@ import fetchShim from '../fetchShim';
 export async function transcribeAudio(filePath: string): Promise<string | null> {
     const apiKey = getOpenAIKey();
     if (!apiKey) {
-        console.warn('STT: No OPENAI_API_KEY found in .env');
+        console.warn('STT: No OPENAI_API_KEY found in environment variables');
         return null;
     }
 

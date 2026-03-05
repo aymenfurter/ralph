@@ -5,7 +5,8 @@ import {
     RalphSettings,
     REVIEW_COUNTDOWN_SECONDS,
     IRalphUI,
-    TaskStatus
+    TaskStatus,
+    TelegramStatus
 } from './types';
 import { logError } from './logger';
 import { readPRDAsync, getNextTaskAsync, getTaskStatsAsync, getWorkspaceRoot, appendProgressAsync, ensureProgressFileAsync, appendTaskToPrdAsync, parseTasksAsync, readFileAsync, listDirectoryContentsAsync } from './fileUtils';
@@ -61,10 +62,20 @@ export class LoopOrchestrator implements ILoopOrchestrator {
 
     setPanel(panel: IRalphUI | null): void {
         this.ui.setPanel(panel);
+        if (panel) {
+            const status = this.telegramHandler.getLastStatus();
+            if (status) {
+                panel.updateTelegramStatus(status);
+            }
+        }
     }
 
     setSidebarView(view: IRalphUI): void {
         this.ui.setSidebarView(view);
+        const status = this.telegramHandler.getLastStatus();
+        if (status) {
+            view.updateTelegramStatus(status);
+        }
     }
 
     setRequirements(requirements: TaskRequirements): void {
@@ -478,7 +489,7 @@ export class LoopOrchestrator implements ILoopOrchestrator {
     }
 
     public async notifyTelegram(message: string, chatId?: string, isVerbose: boolean = false, customKeyboard?: any): Promise<void> {
-        if (isVerbose && this.telegramHandler.isNotificationsMuted()) return;
+        if (!isVerbose && this.telegramHandler.isNotificationsMuted()) return;
 
         if (this.telegramHandler.isEnabled()) {
             try {
@@ -854,5 +865,9 @@ export class LoopOrchestrator implements ILoopOrchestrator {
             message += `<b>Last Error:</b> None`;
         }
         return message;
+    }
+
+    public updateTelegramStatus(status: TelegramStatus): void {
+        this.ui.updateTelegramStatus(status);
     }
 }

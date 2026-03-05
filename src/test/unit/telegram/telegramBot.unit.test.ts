@@ -1,64 +1,52 @@
 import * as assert from 'assert';
-import * as fs from 'fs';
-import * as path from 'path';
-
-const envPath = path.join(__dirname, '..', '..', '..', '..', '.env');
-
-function backupEnv(): string | undefined {
-    try {
-        if (fs.existsSync(envPath)) {
-            const data = fs.readFileSync(envPath, 'utf8');
-            fs.unlinkSync(envPath);
-            return data;
-        }
-    } catch (e) { }
-    return undefined;
-}
-
-function restoreEnv(content?: string) {
-    if (content === undefined) {
-        try { if (fs.existsSync(envPath)) fs.unlinkSync(envPath); } catch (e) { }
-    } else {
-        fs.writeFileSync(envPath, content, 'utf8');
-    }
-}
+import { TelegramBot } from '../../../telegram/telegramBot';
 
 describe('TelegramBot', () => {
-    let orig: string | undefined;
+    let originalEnv: NodeJS.ProcessEnv;
 
-    before(() => { orig = backupEnv(); });
-    after(() => { restoreEnv(orig); });
+    beforeEach(() => {
+        originalEnv = { ...process.env };
+    });
+
+    afterEach(() => {
+        process.env = originalEnv;
+        // Clean up require cache
+        delete require.cache[require.resolve('../../../telegram/telegramBot')];
+        delete require.cache[require.resolve('../../../fetchShim')];
+    });
 
     it('is disabled when no token', () => {
-        try { if (fs.existsSync(envPath)) fs.unlinkSync(envPath); } catch (e) { }
+        delete process.env.RALPH_TELEGRAM_BOT_TOKEN;
+
         delete require.cache[require.resolve('../../../telegram/telegramBot')];
         const { TelegramBot } = require('../../../telegram/telegramBot');
+
         const bot = new TelegramBot();
         assert.strictEqual(bot.isEnabled(), false);
         assert.strictEqual(bot.getApiUrl(), '');
     });
 
     it('is enabled when token present and getMe returns data', async () => {
-        fs.writeFileSync(envPath, 'RALPH_TELEGRAM_BOT_TOKEN=tok-xyz\n', 'utf8');
+        process.env.RALPH_TELEGRAM_BOT_TOKEN = 'tok-xyz';
 
-        // Prepare a mock fetch and ensure telegramBot imports it fresh
+        // Mock fetch
         delete require.cache[require.resolve('../../../fetchShim')];
-        delete require.cache[require.resolve('../../../telegram/telegramBot')];
+        const fetchShim = require('../../../fetchShim');
 
         let lastUrl = '';
-
-        const mockFetch = async (url: string) => {
+        // Mock the default export of fetchShim
+        // Note: fetchShim exports a default function
+        require('../../../fetchShim').default = async (url: string) => {
             lastUrl = url;
             return {
                 json: async () => ({ ok: true, result: { id: 123, is_bot: true } }),
             };
         };
 
-        // Inject mock
-        const fetchShim = require('../../../fetchShim');
-        fetchShim.default = mockFetch;
-
+        // Reload TelegramBot
+        delete require.cache[require.resolve('../../../telegram/telegramBot')];
         const { TelegramBot } = require('../../../telegram/telegramBot');
+
         const bot = new TelegramBot();
 
         assert.strictEqual(bot.isEnabled(), true);
@@ -70,13 +58,12 @@ describe('TelegramBot', () => {
     });
 
     it('fetchBotMessages advances offset and returns results', async () => {
-        // Token already present from previous test; re-require fresh modules to reset state
-        delete require.cache[require.resolve('../../../fetchShim')];
-        delete require.cache[require.resolve('../../../telegram/telegramBot')];
+        process.env.RALPH_TELEGRAM_BOT_TOKEN = 'tok-xyz';
 
         let calls: string[] = [];
 
-        const mockFetch = async (url: string) => {
+        delete require.cache[require.resolve('../../../fetchShim')];
+        require('../../../fetchShim').default = async (url: string) => {
             calls.push(url);
             if (url.includes('getUpdates')) {
                 // First call: return two updates
@@ -89,10 +76,9 @@ describe('TelegramBot', () => {
             return { json: async () => ({ ok: false, result: [] }) };
         };
 
-        const fetchShim = require('../../../fetchShim');
-        fetchShim.default = mockFetch;
-
+        delete require.cache[require.resolve('../../../telegram/telegramBot')];
         const { TelegramBot } = require('../../../telegram/telegramBot');
+
         const bot = new TelegramBot();
 
         const first = await bot.fetchBotMessages(1);
@@ -113,7 +99,12 @@ describe('TelegramBot', () => {
     });
 
     it('escapes HTML special characters correctly', () => {
+        // Need to load class if not loaded
+        if (!require.cache[require.resolve('../../../telegram/telegramBot')]) {
+            delete require.cache[require.resolve('../../../telegram/telegramBot')];
+        }
         const { TelegramBot } = require('../../../telegram/telegramBot');
+
         assert.strictEqual(TelegramBot.escapeHtml('<script>alert("x")</script>'), '&lt;script&gt;alert("x")&lt;/script&gt;');
         assert.strictEqual(TelegramBot.escapeHtml('User & Company'), 'User &amp; Company');
         assert.strictEqual(TelegramBot.escapeHtml('Normal text'), 'Normal text');
@@ -121,13 +112,12 @@ describe('TelegramBot', () => {
     });
 
     it('sends messages with parse_mode=HTML by default', async () => {
-        // Reuse similar setup
-        delete require.cache[require.resolve('../../../fetchShim')];
-        delete require.cache[require.resolve('../../../telegram/telegramBot')];
+        process.env.RALPH_TELEGRAM_BOT_TOKEN = 'tok-xyz';
 
         let lastBody: any;
 
-        const mockFetch = async (url: string, opts: any) => {
+        delete require.cache[require.resolve('../../../fetchShim')];
+        require('../../../fetchShim').default = async (url: string, opts: any) => {
             if (url.includes('sendMessage')) {
                 lastBody = JSON.parse(opts.body);
                 return { json: async () => ({ ok: true }) };
@@ -135,19 +125,20 @@ describe('TelegramBot', () => {
             return { json: async () => ({ ok: false }) };
         };
 
-        const fetchShim = require('../../../fetchShim');
-        fetchShim.default = mockFetch;
-
+        delete require.cache[require.resolve('../../../telegram/telegramBot')];
         const { TelegramBot } = require('../../../telegram/telegramBot');
+
         const bot = new TelegramBot();
+        // Manually enable just in case, though token sets it
+        // bot.token is private but set in constructor via getTelegramBotToken which reads env
+        // mock default chat id
+        process.env.RALPH_TELEGRAM_CHAT_ID = '123';
+        const bot2 = new TelegramBot(); // re-init to pick up chat id
 
-        // Mock token so it's enabled
-        bot.token = 'dummy';
-        bot.apiUrl = 'https://api.telegram.org/botdummy';
-        bot.defaultChatId = '123';
-
-        await bot.sendMessage('<b>bold</b>');
+        await bot2.sendMessage('<b>bold</b>');
         assert.strictEqual(lastBody.parse_mode, 'HTML');
         assert.strictEqual(lastBody.text, '<b>bold</b>');
+        assert.strictEqual(lastBody.chat_id, '123'); // verify chat id was picked up
     });
 });
+

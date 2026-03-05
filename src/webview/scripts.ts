@@ -232,6 +232,47 @@ export function getClientScripts(): string {
             });
         }
 
+        function updateTelegramStatus(status) {
+            const pill = document.getElementById('telegramPill');
+            if (!pill) return;
+
+            // Reset classes
+            pill.className = 'telegram-pill';
+            const tooltip = [];
+
+            if (status.isTokenLoaded) {
+                tooltip.push('✓ Token Loaded');
+            } else {
+                tooltip.push('❌ No Token Found');
+                pill.classList.add('disabled');
+            }
+
+            if (status.isConfigValid) {
+                 tooltip.push('✓ Config Valid');
+            } else {
+                 tooltip.push('❌ Config Invalid');
+                 pill.classList.add('error');
+            }
+
+            if (status.isLongPollingActive) {
+                tooltip.push('✓ Long Polling Active');
+                pill.classList.add('active'); 
+            } else {
+                tooltip.push('○ Long Polling Inactive');
+            }
+            
+            if (status.botName) {
+                tooltip.push('Bot: @' + status.botName);
+            }
+
+            if (status.lastError) {
+                tooltip.push('Error: ' + status.lastError);
+                pill.classList.add('error');
+            }
+
+            pill.title = "Telegram Status:\\n" + tooltip.join('\\n');
+        }
+
         // ====================================================================
         // Message Event Handler
         // ====================================================================
@@ -240,6 +281,9 @@ export function getClientScripts(): string {
             const msg = event.data;
             if (msg.type === 'update') {
                 updateUI(msg.status, msg.iteration, msg.taskInfo);
+            }
+            if (msg.type === 'telegramStatus') {
+                updateTelegramStatus(msg.status);
             }
             if (msg.type === 'countdown') {
                 showCountdown(msg.seconds);

@@ -2,6 +2,13 @@
 
 All notable changes to the Ralph extension will be documented in this file.
 
+## [0.5.3]
+
+### Changed
+- Refactored environment configuration to use `process.env` directly.
+- Added `setup_env.sh` helper script for easier environment setup.
+- Updated documentation for new environment variable workflow.
+
 ## [0.5.1]
 
 ### Fixed

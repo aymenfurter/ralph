@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getTaskStatsAsync, getNextTaskAsync, readPRDAsync } from './fileUtils';
-import { TaskCompletion, TaskRequirements, RalphSettings, IRalphUI } from './types';
+import { TaskCompletion, TaskRequirements, RalphSettings, IRalphUI, TelegramStatus } from './types';
 import {
     getStyles,
     getClientScripts,
@@ -65,6 +65,10 @@ export class RalphPanel implements IRalphUI {
                 this.eventHandlers.get(event)?.delete(handler);
             }
         };
+    }
+
+    updateTelegramStatus(status: TelegramStatus): void {
+        this.panel.webview.postMessage({ type: 'telegramStatus', status });
     }
 
     private emit(event: PanelEventType, data?: PanelEventData): void {

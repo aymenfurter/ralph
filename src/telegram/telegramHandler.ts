@@ -1,4 +1,4 @@
-import { LoopExecutionState } from '../types';
+import { LoopExecutionState, TelegramStatus } from '../types';
 import { TelegramBot } from './telegramBot';
 import { getTelegramAllowedUsers, getTelegramStatusUpdateInterval } from './telegramConfig';
 import { openCopilotWithPrompt } from '../copilotIntegration';
@@ -18,6 +18,7 @@ export interface ILoopOrchestrator {
     getConfirmationResolver(): ((approved: boolean) => void) | undefined;
     getSessionStatsMessage(): Promise<string>;
     handleGenericTelegramCommand(command: string, chatId?: string): Promise<void>;
+    updateTelegramStatus(status: TelegramStatus): void;
 }
 
 export class TelegramHandler {
@@ -26,6 +27,8 @@ export class TelegramHandler {
     private pollingInterval: NodeJS.Timeout | undefined;
     private isMuted: boolean = false;
     private lastStatusUpdate: number = 0;
+    private botInfo: any;
+    private lastStatus: TelegramStatus | undefined;
 
     // Backoff variables
     private failCount = 0;
@@ -35,6 +38,24 @@ export class TelegramHandler {
         this.orchestrator = orchestrator;
         this.bot = new TelegramBot();
         this.lastStatusUpdate = Date.now();
+        this.updateUiStatus();
+    }
+
+    public getLastStatus(): TelegramStatus | undefined {
+        return this.lastStatus;
+    }
+
+    private updateUiStatus(error?: string): void {
+        const isEnabled = this.isEnabled();
+        const status: TelegramStatus = {
+            isTokenLoaded: isEnabled,
+            isConfigValid: isEnabled,
+            isLongPollingActive: this.isPolling,
+            botName: this.botInfo ? this.botInfo.username : undefined,
+            lastError: error || (this.failCount > 0 ? `Connection failed (x${this.failCount})` : undefined)
+        };
+        this.lastStatus = status;
+        this.orchestrator.updateTelegramStatus(status);
     }
 
     public isEnabled(): boolean {
@@ -46,6 +67,19 @@ export class TelegramHandler {
      */
     public async registerCommands(): Promise<void> {
         if (!this.isEnabled()) return;
+
+        // Try getting bot info once
+        if (!this.botInfo) {
+            try {
+                const res = await this.bot.getMe();
+                if (res && res.result) {
+                    this.botInfo = res.result;
+                    this.updateUiStatus();
+                }
+            } catch (e) {
+                console.error('Failed to get bot info', e);
+            }
+        }
 
         const commands = [
             { command: 'start', description: 'Start Ralph loop' },
@@ -75,6 +109,7 @@ export class TelegramHandler {
         this.registerCommands().catch(err => console.error('Failed to register commands', err));
 
         this.isPolling = true;
+        this.updateUiStatus();
 
         // Recursive polling with backoff
         const pollLoop = async () => {
@@ -89,21 +124,24 @@ export class TelegramHandler {
 
                 // Reset failure count on success
                 this.failCount = 0;
+                this.updateUiStatus();
 
                 // Subtract elapsed time from interval, but ensure minimum delay
                 const elapsed = Date.now() - startTime;
                 nextDelay = Math.max(1000, intervalMs - elapsed);
 
-            } catch (error) {
+            } catch (error: any) {
                 this.failCount++;
+                const errMsg = error?.message || 'Unknown error';
                 // Exponential backoff: 30s, 60s, 120s... capped at 5 mins
                 const backoff = Math.min(30000 * Math.pow(1.5, this.failCount), 300000);
                 nextDelay = backoff;
-                console.error(`Telegram polling failed (attempt ${this.failCount}). Retrying in ${Math.round(nextDelay / 1000)}s...`);
+                console.error(`Telegram polling failed (attempt ${this.failCount}). Retrying in ${Math.round(nextDelay / 1000)}s...`, error);
+                this.updateUiStatus(errMsg);
             }
 
             // Periodic status update check
-            await this.checkPeriodicStatus();
+            // await this.checkPeriodicStatus(); // Disabled periodic status for now
 
             if (this.isPolling) {
                 this.pollingInterval = setTimeout(pollLoop, nextDelay);
@@ -121,7 +159,7 @@ export class TelegramHandler {
             if (Date.now() - this.lastStatusUpdate >= intervalMs) {
                 this.lastStatusUpdate = Date.now();
                 const message = await this.orchestrator.getSessionStatsMessage();
-                await this.notify(`🔔 Periodic Update:\n${message}`);
+                await this.notify(`🔔 Periodic Update: \n${message}`);
             }
         }
     }
@@ -174,32 +212,46 @@ export class TelegramHandler {
     private async processUpdates(updates: any[]): Promise<void> {
         const allowedUsers = getTelegramAllowedUsers();
 
+        if (allowedUsers.length === 0) {
+            if (updates.length > 0) {
+                this.log('Telegram: Blocked updates - RALPH_TELEGRAM_ALLOWED_USERS is empty. Configure it in environment variables to allow access.');
+            }
+            return;
+        }
+
         for (const update of updates) {
             let msg: string | undefined;
             let senderId: string | undefined;
             let senderUsername: string | undefined;
             let chatId: string | undefined;
+            let isCallback = false;
 
             if (update.callback_query) {
+                isCallback = true;
                 msg = update.callback_query.data;
                 senderId = update.callback_query.from?.id?.toString();
                 senderUsername = update.callback_query.from?.username;
                 chatId = update.callback_query.message?.chat?.id?.toString();
-
-                await this.bot.answerCallbackQuery(update.callback_query.id);
             } else if (update.message) {
                 senderId = update.message.from?.id?.toString();
                 senderUsername = update.message.from?.username;
                 chatId = update.message.chat?.id?.toString();
+            }
 
+            // Strict Security Check: Deny if not in allowedUsers
+            const isAllowed = (senderId && allowedUsers.includes(senderId)) ||
+                (senderUsername && allowedUsers.includes(senderUsername));
+
+            if (!isAllowed) {
+                this.log(`Telegram: Blocked unauthorized activity from user ${senderUsername || senderId} (ID: ${senderId})`);
+                continue;
+            }
+
+            // Process callback query response or voice message only if authorized
+            if (isCallback) {
+                await this.bot.answerCallbackQuery(update.callback_query.id);
+            } else if (update.message) {
                 if (update.message.voice) {
-                    if (allowedUsers.length > 0 &&
-                        (!senderId || !allowedUsers.includes(senderId)) &&
-                        (!senderUsername || !allowedUsers.includes(senderUsername))) {
-                        this.log(`Telegram: Blocked unauthorized voice message from user ${senderUsername || senderId}`);
-                        continue;
-                    }
-
                     const result = await this.processVoiceMessage(update.message.voice, chatId!);
                     msg = result || undefined;
                 } else {
@@ -209,11 +261,11 @@ export class TelegramHandler {
 
             if (!msg) continue;
 
-            if (allowedUsers.length > 0 &&
-                (!senderId || !allowedUsers.includes(senderId)) &&
-                (!senderUsername || !allowedUsers.includes(senderUsername))) {
-                this.log(`Telegram: Blocked unauthorized message from user ${senderUsername || senderId}`);
-                continue;
+            // Sanitize input
+            msg = msg.replace(/\0/g, '').trim();
+            // Truncate excessively long messages to prevent potential DoS or buffer issues
+            if (msg.length > 4096) {
+                msg = msg.substring(0, 4096);
             }
 
             await this.handleCommand(msg, chatId);
@@ -287,7 +339,7 @@ export class TelegramHandler {
                 await this.notify('Usage: /chat &lt;prompt&gt; — provide a prompt to send to Copilot Chat', chatId);
                 this.log('Telegram: /chat used without prompt.');
             } else {
-                this.log(`Telegram: Sending prompt to Copilot: ${prompt}`);
+                this.log(`Telegram: Sending prompt to Copilot: ${prompt} `);
                 try {
                     const result = await openCopilotWithPrompt(prompt, { freshChat: false });
                     if (result === 'agent') {
@@ -357,7 +409,7 @@ export class TelegramHandler {
         const filePath = path.join(voiceDir, `voice_${timestamp}_${voice.file_unique_id || 'unknown'}.ogg`);
         try {
             await downloadFile(fileLink, filePath);
-            this.log(`Telegram: Voice downloaded to ${filePath}`);
+            this.log(`Telegram: Voice downloaded to ${filePath} `);
         } catch (err) {
             console.error('Download failed', err);
             await this.notify('❌ Failed to download voice message.', chatId);
@@ -370,7 +422,7 @@ export class TelegramHandler {
             return null;
         }
 
-        await this.notify(`🗣️ <b>Transcribed:</b> "${TelegramBot.escapeHtml(text)}"`, chatId);
+        await this.notify(`🗣️ <b>Transcribed: </b> "${TelegramBot.escapeHtml(text)}"`, chatId);
         return text;
     }
 }

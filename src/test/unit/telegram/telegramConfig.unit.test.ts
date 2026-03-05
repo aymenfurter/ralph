@@ -1,61 +1,110 @@
 import * as assert from 'assert';
-import * as fs from 'fs';
-import * as path from 'path';
+import {
+    getTelegramBotToken,
+    getTelegramChatId,
+    getTelegramAllowedUsers,
+    getTelegramStatusUpdateInterval,
+    getOpenAIKey
+} from '../../../telegram/telegramConfig';
 
-const envPath = path.join(__dirname, '..', '..', '..', '..', '.env');
+describe('telegramConfig', () => {
+    let originalEnv: NodeJS.ProcessEnv;
 
-function backupEnv(): string | undefined {
-    try {
-        if (fs.existsSync(envPath)) {
-            const data = fs.readFileSync(envPath, 'utf8');
-            fs.unlinkSync(envPath);
-            return data;
-        }
-    } catch (e) {
-        // ignore
-    }
-    return undefined;
-}
-
-function restoreEnv(content?: string) {
-    if (content === undefined) {
-        try { if (fs.existsSync(envPath)) fs.unlinkSync(envPath); } catch (e) { }
-    } else {
-        fs.writeFileSync(envPath, content, 'utf8');
-    }
-}
-
-describe('telegramConfig.getTelegramBotToken', () => {
-    let orig: string | undefined;
-
-    before(() => {
-        orig = backupEnv();
+    beforeEach(() => {
+        originalEnv = { ...process.env };
     });
 
-    after(() => {
-        restoreEnv(orig);
+    afterEach(() => {
+        process.env = originalEnv;
     });
 
-    it('returns undefined when .env is missing', () => {
-        // Ensure .env does not exist
-        try { if (fs.existsSync(envPath)) fs.unlinkSync(envPath); } catch (e) { }
+    describe('getTelegramBotToken', () => {
+        it('returns undefined when RALPH_TELEGRAM_BOT_TOKEN is not set', () => {
+            delete process.env.RALPH_TELEGRAM_BOT_TOKEN;
+            assert.strictEqual(getTelegramBotToken(), undefined);
+        });
 
-        // Require module fresh
-        delete require.cache[require.resolve('../../../telegram/telegramConfig')];
-        const { getTelegramBotToken } = require('../../../telegram/telegramConfig');
-
-        const token = getTelegramBotToken();
-        assert.strictEqual(token, undefined);
+        it('returns token when RALPH_TELEGRAM_BOT_TOKEN is set', () => {
+            process.env.RALPH_TELEGRAM_BOT_TOKEN = 'test-token';
+            assert.strictEqual(getTelegramBotToken(), 'test-token');
+        });
     });
 
-    it('parses token from .env', () => {
-        const sample = 'RALPH_TELEGRAM_BOT_TOKEN=abc123\nOTHER=foo\n';
-        fs.writeFileSync(envPath, sample, 'utf8');
+    describe('getTelegramChatId', () => {
+        it('returns undefined when RALPH_TELEGRAM_CHAT_ID is not set', () => {
+            delete process.env.RALPH_TELEGRAM_CHAT_ID;
+            assert.strictEqual(getTelegramChatId(), undefined);
+        });
 
-        delete require.cache[require.resolve('../../../telegram/telegramConfig')];
-        const { getTelegramBotToken } = require('../../../telegram/telegramConfig');
+        it('returns chat ID when RALPH_TELEGRAM_CHAT_ID is set', () => {
+            process.env.RALPH_TELEGRAM_CHAT_ID = '123456';
+            assert.strictEqual(getTelegramChatId(), '123456');
+        });
+    });
 
-        const token = getTelegramBotToken();
-        assert.strictEqual(token, 'abc123');
+    describe('getTelegramAllowedUsers', () => {
+        it('returns empty array when RALPH_TELEGRAM_ALLOWED_USERS is not set', () => {
+            delete process.env.RALPH_TELEGRAM_ALLOWED_USERS;
+            assert.deepStrictEqual(getTelegramAllowedUsers(), []);
+        });
+
+        it('returns array of users when RALPH_TELEGRAM_ALLOWED_USERS is set', () => {
+            process.env.RALPH_TELEGRAM_ALLOWED_USERS = 'user1,user2,user3';
+            assert.deepStrictEqual(getTelegramAllowedUsers(), ['user1', 'user2', 'user3']);
+        });
+
+        it('trims whitespace from users', () => {
+            process.env.RALPH_TELEGRAM_ALLOWED_USERS = ' user1 , user2 ';
+            assert.deepStrictEqual(getTelegramAllowedUsers(), ['user1', 'user2']);
+        });
+
+        it('filters empty strings', () => {
+            process.env.RALPH_TELEGRAM_ALLOWED_USERS = 'user1,,user2';
+            assert.deepStrictEqual(getTelegramAllowedUsers(), ['user1', 'user2']);
+        });
+    });
+
+    describe('getTelegramStatusUpdateInterval', () => {
+        it('returns 0 when RALPH_TELEGRAM_STATUS_INTERVAL is not set', () => {
+            delete process.env.RALPH_TELEGRAM_STATUS_INTERVAL;
+            assert.strictEqual(getTelegramStatusUpdateInterval(), 0);
+        });
+
+        it('returns interval when RALPH_TELEGRAM_STATUS_INTERVAL is set', () => {
+            process.env.RALPH_TELEGRAM_STATUS_INTERVAL = '60000';
+            assert.strictEqual(getTelegramStatusUpdateInterval(), 60000);
+        });
+
+        it('returns 0 when RALPH_TELEGRAM_STATUS_INTERVAL is invalid', () => {
+            process.env.RALPH_TELEGRAM_STATUS_INTERVAL = 'invalid';
+            assert.strictEqual(getTelegramStatusUpdateInterval(), 0);
+        });
+    });
+
+    describe('getOpenAIKey', () => {
+        it('returns undefined when no key is set', () => {
+            delete process.env.RALPH_OPENAI_API_KEY;
+            delete process.env.OPENAI_API_KEY;
+            assert.strictEqual(getOpenAIKey(), undefined);
+        });
+
+        it('returns RALPH_OPENAI_API_KEY when set', () => {
+            process.env.RALPH_OPENAI_API_KEY = 'ralph-key';
+            delete process.env.OPENAI_API_KEY;
+            assert.strictEqual(getOpenAIKey(), 'ralph-key');
+        });
+
+        it('returns OPENAI_API_KEY when RALPH_OPENAI_API_KEY is not set', () => {
+            delete process.env.RALPH_OPENAI_API_KEY;
+            process.env.OPENAI_API_KEY = 'openai-key';
+            assert.strictEqual(getOpenAIKey(), 'openai-key');
+        });
+
+        it('prefers RALPH_OPENAI_API_KEY over OPENAI_API_KEY', () => {
+            process.env.RALPH_OPENAI_API_KEY = 'ralph-key';
+            process.env.OPENAI_API_KEY = 'openai-key';
+            assert.strictEqual(getOpenAIKey(), 'ralph-key');
+        });
     });
 });
+

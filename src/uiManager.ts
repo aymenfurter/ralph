@@ -1,5 +1,5 @@
 import { RalphStatusBar, LoopStatus } from './statusBar';
-import { TaskCompletion, IRalphUI } from './types';
+import { TaskCompletion, IRalphUI, TelegramStatus } from './types';
 import { log } from './logger';
 
 export class UIManager {
@@ -24,6 +24,11 @@ export class UIManager {
         this.statusBar.setStatus(status);
         this.panel?.updateStatus(status, iteration, currentTask, []);
         this.sidebarView?.updateStatus(status, iteration, currentTask, []);
+    }
+
+    updateTelegramStatus(status: TelegramStatus): void {
+        this.panel?.updateTelegramStatus(status);
+        this.sidebarView?.updateTelegramStatus(status);
     }
 
     setIteration(iteration: number): void {

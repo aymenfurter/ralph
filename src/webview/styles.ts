@@ -106,7 +106,80 @@ export function getStyles(): string {
             color: white;
             backdrop-filter: blur(4px);
         }
+        .telegram-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            margin-left: 8px;
+            position: relative;
+            cursor: help;
+            transition: all 0.3s ease;
+        }
 
+        .telegram-pill svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .telegram-status-dot {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--vscode-testing-iconPassed);
+            border: 2px solid var(--vscode-editor-background);
+        }
+
+        .telegram-pill.disabled {
+            opacity: 0.3;
+            background: rgba(128, 128, 128, 0.1);
+        }
+        
+        .telegram-pill.disabled .telegram-status-dot {
+            background-color: var(--vscode-disabledForeground);
+        }
+
+        .telegram-pill.error {
+            background: rgba(255, 0, 0, 0.1);
+            color: var(--vscode-errorForeground);
+        }
+
+        .telegram-pill.error .telegram-status-dot {
+            background-color: var(--vscode-errorForeground);
+        }
+
+        .telegram-pill.active {
+            background: rgba(59, 130, 246, 0.15); /* Telegram blue-ish */
+            color: #3b82f6; 
+        }
+
+        .telegram-pill.active .telegram-status-dot {
+             background-color: #22c55e; /* Green for connected */
+             box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+             animation: pulse 2s infinite;
+        }
+
+        .header.running .telegram-pill.active, 
+        .header.waiting .telegram-pill.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .header.running .telegram-status-dot,
+        .header.waiting .telegram-status-dot {
+            border-color: transparent;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
         .status-dot {
             width: 6px;
             height: 6px;

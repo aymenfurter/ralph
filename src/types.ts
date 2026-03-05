@@ -80,6 +80,14 @@ export const INACTIVITY_TIMEOUT_MS = 60_000;
 
 export const INACTIVITY_CHECK_INTERVAL_MS = 10_000;
 
+export interface TelegramStatus {
+    isTokenLoaded: boolean;
+    isConfigValid: boolean;
+    isLongPollingActive: boolean;
+    botName?: string;
+    lastError?: string;
+}
+
 export interface IRalphUI {
     updateStatus(status: string, iteration: number, currentTask: string, history: TaskCompletion[]): void;
     updateCountdown(seconds: number): void;
@@ -89,4 +97,5 @@ export interface IRalphUI {
     refresh(): void | Promise<void>;
     addLog(message: string, highlight?: boolean): void;
     showPrdGenerating(): void;
+    updateTelegramStatus(status: TelegramStatus): void;
 }
