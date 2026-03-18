@@ -490,13 +490,13 @@ export class LoopOrchestrator implements ILoopOrchestrator {
         this.ui.updateSessionTiming(this.sessionStartTime, this.taskRunner.getTaskHistory(), stats.pending);
     }
 
-    public async notifyTelegram(message: string, chatId?: string, isVerbose: boolean = false, customKeyboard?: any): Promise<void> {
-        //if (!isVerbose && this.telegramHandler.isNotificationsMuted()) return;
+    public async notifyTelegram(message: string, chatId?: string, silent: boolean = false, customKeyboard?: any): Promise<void> {
+        // NOTE: mute/unmute feature removed; notifications are always sent when enabled.
 
         if (this.telegramHandler.isEnabled()) {
             try {
                 const keyboard = customKeyboard || this.getInlineKeyboard();
-                await this.telegramHandler.notify(message, chatId, false, keyboard);
+                await this.telegramHandler.notify(message, chatId, silent, keyboard);
             } catch (err) {
                 this.ui.addLog(`Telegram notification failed: ${err}`);
             }
@@ -542,14 +542,7 @@ export class LoopOrchestrator implements ILoopOrchestrator {
         } else if (/ambiguous/i.test(cmd)) {
             this.ui.addLog('Telegram: Ambiguous counter reset.');
             await this.notifyTelegram('Ambiguous counter reset', chatId);
-        } else if (/^\/mute$/i.test(cmd)) {
-            this.telegramHandler.setMuted(true);
-            this.ui.addLog('Telegram: Muted verbose notifications.');
-            await this.notifyTelegram('Verbose notifications muted. You will only receive important updates.', chatId);
-        } else if (/^\/unmute$/i.test(cmd)) {
-            this.telegramHandler.setMuted(false);
-            this.ui.addLog('Telegram: Unmuted verbose notifications.');
-            await this.notifyTelegram('Verbose notifications unmuted. You will receive all updates.', chatId);
+        } else if (/^\/status|\/stats/i.test(cmd) || /status|stats/i.test(cmd)) {
         } else if (/^\/status|\/stats/i.test(cmd) || /status|stats/i.test(cmd)) {
             // Gather session stats
             this.lastStatusUpdate = Date.now();
@@ -681,7 +674,6 @@ export class LoopOrchestrator implements ILoopOrchestrator {
             }
         } else if (/stop/i.test(cmd)) {
             await this.stopLoop();
-            await this.notifyTelegram('<b>Loop stopped by Telegram command.</b>', chatId);
             this.ui.addLog('Telegram: Loop stopped.');
         } else if (/^\/ls(\s+.*)?$/i.test(cmd)) {
             const m = cmd.match(/^\/ls\s+(.*)$/i);
@@ -796,8 +788,6 @@ export class LoopOrchestrator implements ILoopOrchestrator {
 "/status" or "/stats" - Show session stats
 "/chat <prompt>" - Send text to Copilot Chat
 "/add <task>" - Append new task to PRD.md
-"/mute" - Mute verbose notifications
-"/unmute" - Unmute verbose notifications
 "/list" - List all pending tasks
 "/log <n>" - Show last n log lines
 "/cat <path>" - Show file content
@@ -858,7 +848,7 @@ export class LoopOrchestrator implements ILoopOrchestrator {
         const lastError = this.lastError || 'None';
         let message = `<b>Ralph Session Stats:</b>\n`;
         message += `<b>State:</b> ${state}\n`;
-        message += `<b>Muted:</b> ${this.telegramHandler.isNotificationsMuted() ? 'Yes' : 'No'}\n`;
+        message += `<b>Muted:</b> No (feature removed)\n`;
         message += `<b>Current Task:</b> <i>${TelegramBot.escapeHtml(currentTask || 'None')}</i>\n`;
         message += `<b>Progress:</b> ${stats.completed}/${stats.total} complete\n`;
         message += `<b>Elapsed Time:</b> ${elapsed}\n`;

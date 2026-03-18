@@ -79,13 +79,16 @@ export class UIManager {
 
     async getRecentChatLogs(count: number): Promise<string[]> {
         if (count <= 0) return [];
-        const startIndex = Math.max(this.logs.length - count, 0);
         try {
             await vscode.commands.executeCommand('workbench.action.chat.copyAll');
-            const copilotChatLog = (await vscode.env.clipboard.readText()).split('\n');
-            return copilotChatLog ? copilotChatLog.slice(startIndex) : [];
+            const text = await vscode.env.clipboard.readText();
+            const copilotChatLog = text.split(/\r?\n/);
+            const startIndex = Math.max(copilotChatLog.length - count, 0);
+            return copilotChatLog.slice(startIndex);
         } catch (e) {
-            return [];
+            // Fallback to logs stored in memory if clipboard access or chat copy fails.
+            const start = Math.max(this.logs.length - count, 0);
+            return this.logs.slice(start);
         }
     }
 

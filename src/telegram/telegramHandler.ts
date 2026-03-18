@@ -25,7 +25,6 @@ export class TelegramHandler {
     private bot: TelegramBot;
     private orchestrator: ILoopOrchestrator;
     private pollingInterval: NodeJS.Timeout | undefined;
-    private isMuted: boolean = false;
     private lastStatusUpdate: number = 0;
     private botInfo: any;
     private lastStatus: TelegramStatus | undefined;
@@ -93,8 +92,7 @@ export class TelegramHandler {
             { command: 'add', description: 'Add new task to PRD' },
             { command: 'skip', description: 'Skip current task' },
             { command: 'retry', description: 'Retry current task' },
-            { command: 'mute', description: 'Mute notifications' },
-            { command: 'unmute', description: 'Unmute notifications' }
+            // mute/unmute feature removed
         ];
 
         await this.bot.setMyCommands(commands);
@@ -191,18 +189,7 @@ export class TelegramHandler {
     }
 
     public async notify(message: string, chatId?: string, _silent: boolean = false, replyMarkup?: any): Promise<void> {
-        if (this.isMuted) {
-            return;
-        }
         await this.bot.sendMessage(message, chatId, replyMarkup);
-    }
-
-    public setMuted(muted: boolean): void {
-        this.isMuted = muted;
-    }
-
-    public isNotificationsMuted(): boolean {
-        return this.isMuted;
     }
 
     private log(message: string, highlight: boolean = false): void {
@@ -302,7 +289,6 @@ export class TelegramHandler {
         // Control commands
         if (/^\/start(?:-loop)?$/i.test(msg)) {
             await this.orchestrator.startLoop();
-            await this.notify('<b>Loop started by Telegram command.</b>', chatId);
             this.log('Telegram: Loop started.');
         } else if (/^\/pause$/i.test(msg)) {
             this.orchestrator.pauseLoop();
@@ -317,13 +303,11 @@ export class TelegramHandler {
             await this.notify('<b>Loop stopped by Telegram command.</b>', chatId);
             this.log('Telegram: Loop stopped.');
         } else if (/^\/mute$/i.test(msg)) {
-            this.isMuted = true;
-            await this.notify('<i>Notifications muted. Only errors and direct replies will be sent.</i>', chatId);
-            this.log('Telegram: Notifications muted.');
+            await this.notify('<i>The mute/unmute feature is no longer supported.</i>', chatId);
+            this.log('Telegram: Received /mute, but feature is removed.');
         } else if (/^\/unmute$/i.test(msg)) {
-            this.isMuted = false;
-            await this.notify('<i>Notifications unmuted. All updates will be sent.</i>', chatId);
-            this.log('Telegram: Notifications unmuted.');
+            await this.notify('<i>The mute/unmute feature is no longer supported.</i>', chatId);
+            this.log('Telegram: Received /unmute, but feature is removed.');
         } else if (/^\/continue$/i.test(msg)) {
             this.log('Telegram: Sending "continue" to Copilot...');
             await openCopilotWithPrompt('yes, continue', { freshChat: false });
