@@ -1,6 +1,7 @@
 import { RalphStatusBar, LoopStatus } from './statusBar';
 import { TaskCompletion, IRalphUI, TelegramStatus } from './types';
 import { log } from './logger';
+import * as vscode from 'vscode';
 
 export class UIManager {
     private panel: IRalphUI | null = null;
@@ -76,12 +77,16 @@ export class UIManager {
         this.sidebarView?.addLog(message, highlight);
     }
 
-    getRecentLogs(count: number): string[] {
-        if (count <= 0) {
+    async getRecentChatLogs(count: number): Promise<string[]> {
+        if (count <= 0) return [];
+        const startIndex = Math.max(this.logs.length - count, 0);
+        try {
+            await vscode.commands.executeCommand('workbench.action.chat.copyAll');
+            const copilotChatLog = (await vscode.env.clipboard.readText()).split('\n');
+            return copilotChatLog ? copilotChatLog.slice(startIndex) : [];
+        } catch (e) {
             return [];
         }
-        const startIndex = Math.max(this.logs.length - count, 0);
-        return this.logs.slice(startIndex);
     }
 
     clearLogs(): void {

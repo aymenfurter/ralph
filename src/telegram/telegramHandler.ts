@@ -191,7 +191,7 @@ export class TelegramHandler {
     }
 
     public async notify(message: string, chatId?: string, _silent: boolean = false, replyMarkup?: any): Promise<void> {
-        if (this.isMuted && !message.toLowerCase().includes('error')) {
+        if (this.isMuted) {
             return;
         }
         await this.bot.sendMessage(message, chatId, replyMarkup);

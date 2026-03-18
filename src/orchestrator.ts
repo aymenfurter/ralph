@@ -400,9 +400,11 @@ export class LoopOrchestrator implements ILoopOrchestrator {
         this.ui.addLog('⚠️ No file activity detected for 60 seconds...');
 
         this.ui.addLog(`⚠️ Detected possible Copilot stuck state`);
-        const recentLogs = this.ui.getRecentLogs(15);
-        const recentLogText = recentLogs.length > 0
-            ? `\n\n<b>Last 15 chat lines:</b>\n<pre>${recentLogs.map((line) => TelegramBot.escapeHtml(line)).join('\n')}</pre>`
+        const recentLogs = await this.ui.getRecentChatLogs(15);
+        const escapedLogs = recentLogs.map((line) => TelegramBot.escapeHtml(line)).join('\n');
+        const truncatedLogs = escapedLogs.length > 3600 ? escapedLogs.substring(escapedLogs.length - 3600) : escapedLogs;
+        const recentLogText = truncatedLogs.length > 0
+            ? `\n\n<b>Last 15 chat lines:</b>\n<pre>${truncatedLogs}</pre>`
             : '';
         this.lastError = 'Agent stuck (inactivity)';
 
@@ -489,7 +491,7 @@ export class LoopOrchestrator implements ILoopOrchestrator {
     }
 
     public async notifyTelegram(message: string, chatId?: string, isVerbose: boolean = false, customKeyboard?: any): Promise<void> {
-        if (!isVerbose && this.telegramHandler.isNotificationsMuted()) return;
+        //if (!isVerbose && this.telegramHandler.isNotificationsMuted()) return;
 
         if (this.telegramHandler.isEnabled()) {
             try {
@@ -625,14 +627,15 @@ export class LoopOrchestrator implements ILoopOrchestrator {
         } else if (/^\/log(?:\s+(\d+))?$/i.test(cmd)) {
             const match = cmd.match(/^\/log(?:\s+(\d+))?$/i);
             const count = match && match[1] ? parseInt(match[1], 10) : 15;
-            const logs = this.ui.getRecentLogs(count);
+            const logs = await this.ui.getRecentChatLogs(count);
             if (logs.length === 0) {
                 await this.notifyTelegram('No logs available.', chatId);
             } else {
                 const escapedLogs = logs.map(l => TelegramBot.escapeHtml(l)).join('\n');
-                const logMessage = `<b>Last ${logs.length} log lines:</b>\n<pre>${escapedLogs}</pre>`;
-                // Truncate to avoid Telegram message length limits
-                const truncated = logMessage.length > 4000 ? logMessage.substring(logMessage.length - 4000) : logMessage;
+                const truncatedLogs = escapedLogs.length > 3600 ? escapedLogs.substring(escapedLogs.length - 3600) : escapedLogs;
+                const logMessage = `<b>Last ${logs.length} log lines:</b>\n<pre>${truncatedLogs}</pre>`;
+                // Another, final truncate to avoid Telegram message length limits
+                const truncated = logMessage.length > 4000 ? logMessage.substring(0, 4000) : logMessage;
                 await this.notifyTelegram(truncated, chatId);
             }
             this.ui.addLog(`Telegram: Sent last ${logs.length} log lines.`);

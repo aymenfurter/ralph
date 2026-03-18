@@ -319,6 +319,12 @@ export class RalphSidebarProvider implements vscode.WebviewViewProvider, IRalphU
         return !!(this._view && this._view.webview);
     }
 
+    // Required by IRalphUI, but the sidebar does not display Telegram status.
+    // Implemented as a no-op to keep the interface contract.
+    public updateTelegramStatus(_status: TelegramStatus): void {
+        // no-op
+    }
+
     public updateStatus(_status: string, _iteration: number, _currentTask: string, _history: TaskCompletion[]): void {
 
     }

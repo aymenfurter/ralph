@@ -2,13 +2,31 @@
 
 All notable changes to the Ralph extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Telegram remote control integration: session commands, status updates, log retrieval, file browsing and execution commands.
+- Inline keyboard buttons and richer Markdown/HTML formatting for Telegram notifications.
+
+### Fixed
+- Prevent Telegram API failures from crashing Ralph and added robust polling with backoff.
+
 ## [0.5.3]
 
 ### Changed
 - Refactored environment configuration to use `process.env` directly.
 - Added `setup_env.sh` helper script for easier environment setup.
 - Updated documentation for new environment variable workflow.
+- Added `setup_env.ps1`, verified it works on windows
 
+## [Unreleased]
+
+### Added
+- Telegram remote control integration: session commands, status updates, log retrieval, file browsing and execution commands.
+- Inline keyboard buttons and richer Markdown/HTML formatting for Telegram notifications.
+
+### Fixed
+- Prevent Telegram API failures from crashing Ralph and added robust polling with backoff.
 ## [0.5.1]
 
 ### Fixed
