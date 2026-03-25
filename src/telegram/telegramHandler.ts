@@ -12,7 +12,7 @@ export interface ILoopOrchestrator {
     resumeLoop(): void;
     stopLoop(): Promise<void>;
     runSingleStep(): Promise<void>;
-    notifyTelegram(message: string, chatId?: string, silent?: boolean, replyMarkup?: any): Promise<void>;
+    notifyTelegram(message: string, chatId?: string, disableNotification?: boolean, replyMarkup?: any): Promise<void>;
     getLogCallback(): (message: string, highlight?: boolean) => void;
     getState(): LoopExecutionState;
     getConfirmationResolver(): ((approved: boolean) => void) | undefined;
@@ -188,8 +188,8 @@ export class TelegramHandler {
         }
     }
 
-    public async notify(message: string, chatId?: string, _silent: boolean = false, replyMarkup?: any): Promise<void> {
-        await this.bot.sendMessage(message, chatId, replyMarkup);
+    public async notify(message: string, chatId?: string, disableNotification: boolean = false, replyMarkup?: any): Promise<void> {
+        await this.bot.sendMessage(message, chatId, replyMarkup, { disableNotification });
     }
 
     private log(message: string, highlight: boolean = false): void {

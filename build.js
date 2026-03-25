@@ -1,7 +1,13 @@
 const esbuild = require('esbuild');
+const fs = require('fs');
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
+
+const outDir = 'out';
+if (fs.existsSync(outDir)) {
+    fs.rmSync(outDir, { recursive: true, force: true });
+}
 
 async function main() {
     const ctx = await esbuild.context({

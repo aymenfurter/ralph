@@ -43,7 +43,7 @@ export class TelegramBot {
             .replace(/>/g, '&gt;');
     }
 
-    async sendMessage(text: string, chatId?: string | number, replyMarkup?: any): Promise<boolean> {
+    async sendMessage(text: string, chatId?: string | number, replyMarkup?: any, options?: { disableNotification?: boolean }): Promise<boolean> {
         if (!this.isEnabled()) return false;
         const targetChatId = chatId || this.defaultChatId;
         if (!targetChatId) {
@@ -57,6 +57,10 @@ export class TelegramBot {
                 text: text,
                 parse_mode: 'HTML' // Optional, but good for formatting. Will fix issue: HTML/Markdown parsing
             };
+
+            if (options && options.disableNotification) {
+                bodyPayload.disable_notification = true;
+            }
 
             if (replyMarkup) {
                 bodyPayload.reply_markup = replyMarkup;

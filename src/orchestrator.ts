@@ -307,7 +307,8 @@ export class LoopOrchestrator implements ILoopOrchestrator {
             this.ui.addLog('🎉 All tasks completed!', true);
             this.stopLoop();
             vscode.window.showInformationMessage('Ralph: All PRD tasks completed! 🎉');
-            await this.notifyTelegram('🎉 <b>All PRD tasks completed!</b>');
+            // Send final completion notice silently to avoid disturbing the user
+            await this.notifyTelegram('🎉 <b>All PRD tasks completed!</b>', undefined, true);
             return;
         }
 
@@ -490,13 +491,13 @@ export class LoopOrchestrator implements ILoopOrchestrator {
         this.ui.updateSessionTiming(this.sessionStartTime, this.taskRunner.getTaskHistory(), stats.pending);
     }
 
-    public async notifyTelegram(message: string, chatId?: string, silent: boolean = false, customKeyboard?: any): Promise<void> {
-        // NOTE: mute/unmute feature removed; notifications are always sent when enabled.
+    public async notifyTelegram(message: string, chatId?: string, disableNotification: boolean = false, customKeyboard?: any): Promise<void> {
+        // NOTE: mute/unmute feature removed; use `disableNotification` to send silently via Telegram API.
 
         if (this.telegramHandler.isEnabled()) {
             try {
                 const keyboard = customKeyboard || this.getInlineKeyboard();
-                await this.telegramHandler.notify(message, chatId, silent, keyboard);
+                await this.telegramHandler.notify(message, chatId, disableNotification, keyboard);
             } catch (err) {
                 this.ui.addLog(`Telegram notification failed: ${err}`);
             }
