@@ -1,3 +1,5 @@
+/// <reference types="node" />
+// Use global NodeJS.Timeout and global setInterval/clearInterval
 import { INACTIVITY_TIMEOUT_MS, INACTIVITY_CHECK_INTERVAL_MS } from './types';
 
 export type InactivityCallback = () => Promise<void>;

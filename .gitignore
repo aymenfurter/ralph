@@ -5,3 +5,6 @@ node_modules
 .ralph
 coverage
 .nyc_output
+.env
+PRD.md
+progress.txt

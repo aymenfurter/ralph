@@ -120,7 +120,7 @@ export async function buildAgentPromptAsync(taskDescription: string, requirement
     parts.push('');
     parts.push(`Workspace: ${root}`);
     parts.push('');
-    parts.push('Begin now. Remember: updating both PRD.md and progress.txt when done is MANDATORY!');
+    parts.push('Begin now. Remember: updating both progress.txt and PRD.md when done is MANDATORY!');
 
     return parts.join('\n');
 }

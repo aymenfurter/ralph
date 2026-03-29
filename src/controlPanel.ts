@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getTaskStatsAsync, getNextTaskAsync, readPRDAsync } from './fileUtils';
-import { TaskCompletion, TaskRequirements, RalphSettings, IRalphUI } from './types';
+import { TaskCompletion, TaskRequirements, RalphSettings, IRalphUI, TelegramStatus } from './types';
 import {
     getStyles,
     getClientScripts,
@@ -65,6 +65,10 @@ export class RalphPanel implements IRalphUI {
                 this.eventHandlers.get(event)?.delete(handler);
             }
         };
+    }
+
+    updateTelegramStatus(status: TelegramStatus): void {
+        this.panel.webview.postMessage({ type: 'telegramStatus', status });
     }
 
     private emit(event: PanelEventType, data?: PanelEventData): void {
@@ -313,6 +317,12 @@ export class RalphSidebarProvider implements vscode.WebviewViewProvider, IRalphU
 
     private isViewAvailable(): boolean {
         return !!(this._view && this._view.webview);
+    }
+
+    // Required by IRalphUI, but the sidebar does not display Telegram status.
+    // Implemented as a no-op to keep the interface contract.
+    public updateTelegramStatus(_status: TelegramStatus): void {
+        // no-op
     }
 
     public updateStatus(_status: string, _iteration: number, _currentTask: string, _history: TaskCompletion[]): void {
