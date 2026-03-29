@@ -229,7 +229,7 @@ export function getLogSection(): string {
     </div>`;
 }
 
-const EXTENSION_VERSION = '0.5.3';
+const EXTENSION_VERSION = '0.5.4';
 
 export function getFooter(): string {
     return `

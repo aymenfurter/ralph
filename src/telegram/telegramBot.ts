@@ -22,6 +22,10 @@ export class TelegramBot {
         return this.apiUrl;
     }
 
+    public getIsFetching(): boolean {
+        return this.isFetching;
+    }
+
     isEnabled(): boolean {
         return !!this.token;
     }

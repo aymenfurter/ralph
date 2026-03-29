@@ -2,6 +2,13 @@
 
 All notable changes to the Ralph extension will be documented in this file.
 
+
+## [0.5.4] - 2026-03-30
+
+### Changed
+- Bumped version to 0.5.4 and finalized Telegram remote control integration for release.
+- Updated all version references and marked PRD.md task as complete.
+
 ## [Unreleased]
 
 ### Added
